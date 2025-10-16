@@ -21,6 +21,9 @@ Usage:
 """
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
+import os
+
 from modules.hazard_funcs import load_tc_hazard_from_wind_mats
 
 # base directory where hazard input files live
@@ -30,14 +33,34 @@ haz_dir = Path("/home/groups/bakerjw/smeiler/climada_data/data/hazard")
 mat_dir = haz_dir / "tropical_cyclone" / "gori" / "ncep_reanal"
 track_mat_path = haz_dir / "tropical_cyclone" / "gori" / "UScoast6_AL_ncep_reanal_roEst1rmEst1_trk100.mat"
 
-# build hazard object
-haz = load_tc_hazard_from_wind_mats(
-    mat_dir=mat_dir,
-    track_mat_path=track_mat_path,
-    resolution_deg=0.1,
-    pad_deg=1.0,
-)
+# ---- subset control ----
+N = 100  # try 50–200 to sanity-check time/memory
 
-# write to HDF5
-out_path = haz_dir / "tropical_cyclone" / "gori" / "tc_ncep_reanal.hdf5"
+files = sorted(p for p in mat_dir.glob("*.mat") if p.is_file())
+if not files:
+    raise FileNotFoundError(f"No .mat files in {mat_dir}")
+subset = files[:N]
+print(f"Building hazard from a subset of {len(subset)} files (of {len(files)} total)")
+
+# Use $SCRATCH if available for temp symlink dir (faster I/O)
+scratch = Path(os.environ.get("SCRATCH", "/tmp"))
+with TemporaryDirectory(dir=scratch) as tmp:
+    tmp_dir = Path(tmp)
+    # Symlink the first N files into the temp dir
+    for fp in subset:
+        (tmp_dir / fp.name).symlink_to(fp)
+
+    # build hazard object from the subset directory
+    haz = load_tc_hazard_from_wind_mats(
+        mat_dir=tmp_dir,               # << point to the temp subset
+        track_mat_path=track_mat_path,
+        resolution_deg=0.1,
+        pad_deg=1.0,
+    )
+
+# write to HDF5 (avoid overwriting full run)
+out_path = haz_dir / "tropical_cyclone" / "gori" / f"tc_ncep_reanal_subset{N}.hdf5"
+out_path.parent.mkdir(parents=True, exist_ok=True)
+print(f"Writing HDF5 to {out_path}")
 haz.write_hdf5(out_path)
+print("Done.")
