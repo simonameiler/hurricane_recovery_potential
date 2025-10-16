@@ -1,3 +1,38 @@
+# --- Project-specific ignores (HRP) ---
+
+# Data (keep structure + tiny samples only)
+# keep larger files in climada_data, keep small project-speficif inputs here
+
+# Results / logs / figures
+outputs/
+results/
+logs/
+figures/
+reports/
+
+# Cluster / SLURM artifacts
+slurm-*.out
+slurm-*.err
+*.o[0-9]*
+*.e[0-9]*
+
+# Geospatial / scientific binaries (usually large; keep small samples under data/sample/)
+*.tif
+*.tiff
+*.vrt
+*.nc
+*.grib
+*.grb2
+*.hdf
+*.zip
+
+# OS/editor odds & ends
+.DS_Store
+*~
+*.tmp
+*.bak
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
