@@ -19,7 +19,7 @@ fi
 conda activate climada_env || true
 
 # Repo root (adjust path)
-REPO="$HOME/path/to/hurricane_recovery_potential"
+REPO="/home/groups/bakerjw/smeiler/repos/hurricane_recovery_potential"
 cd "$REPO"
 
 # Ensure logs dir exists
