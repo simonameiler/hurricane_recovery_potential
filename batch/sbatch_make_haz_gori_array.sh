@@ -9,33 +9,27 @@
 # NOTE: set the array range when submitting, e.g. --array=0-20
 
 set -euo pipefail
+set -x
 
-# --- Load environment ---
-module purge
-# Try mambaforge, then miniforge3, then generic conda
-if [ -f "$HOME/mambaforge/etc/profile.d/conda.sh" ]; then
-  source "$HOME/mambaforge/etc/profile.d/conda.sh"
-elif [ -f "$HOME/miniforge3/etc/profile.d/conda.sh" ]; then
-  source "$HOME/miniforge3/etc/profile.d/conda.sh"
-elif command -v conda >/dev/null 2>&1; then
-  # shellcheck disable=SC1090
-  source "$(conda info --base)/etc/profile.d/conda.sh"
+# --- activate env ---
+CONDA_BASE="$(conda info --base 2>/dev/null || true)"
+if [[ -n "${CONDA_BASE}" && -f "${CONDA_BASE}/etc/profile.d/conda.sh" ]]; then
+  source "${CONDA_BASE}/etc/profile.d/conda.sh"
+  conda activate climada_env
+else
+  echo "Could not locate conda.sh via 'conda info --base'." >&2
+  exit 1
 fi
 
 # Activate your env (adjust name as needed)
 conda activate climada_env || true
 
 # Repo root (keep your path)
-REPO="/home/groups/bakerjw/smeiler/repos/hurricane_recovery_potential"
-cd "$REPO"
-
-# Ensure logs dir exists
+REPO="$HOME/repos/hurricane_recovery_potential"
 mkdir -p logs
+export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
 
-# Make your package modules importable without installing
-export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}$REPO"
-
-# Prefer scratch for temp/intermediate writes
+# --- scratch for temps (faster I/O) ---
 export TMPDIR="${SCRATCH:-/tmp}"
 mkdir -p "$TMPDIR"
 
