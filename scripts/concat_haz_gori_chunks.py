@@ -15,6 +15,7 @@ Example:
         --output /home/groups/bakerjw/smeiler/climada_data/data/hazard/tropical_cyclone/gori/tc_ncep_reanal.hdf5
 """
 
+import re
 from __future__ import annotations
 import argparse
 import sys
@@ -35,10 +36,16 @@ def _default_paths() -> tuple[Path, str, Path]:
     return input_dir, pattern, output_path
 
 
+_CHUNK_NUM = re.compile(r"chunk(\d+)", re.I)
+
 def _sorted_chunk_files(input_dir: Path, pattern: str) -> List[Path]:
-    """Return chunk files sorted lexicographically (good enough for numbered names)."""
-    files = sorted(input_dir.glob(pattern))
-    return files
+    """Return chunk files sorted by the integer after 'chunk' (natural order)."""
+    def key(p: Path) -> tuple[int, str]:
+        m = _CHUNK_NUM.search(p.name)
+        # fallback to 0 if not found to keep deterministic behavior
+        n = int(m.group(1)) if m else 0
+        return (n, p.name)
+    return sorted(input_dir.glob(pattern), key=key)
 
 
 def concat_hazards(paths: Iterable[Path]) -> Hazard:
