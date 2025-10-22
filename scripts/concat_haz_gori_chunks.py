@@ -15,8 +15,8 @@ Example:
         --output /home/groups/bakerjw/smeiler/climada_data/data/hazard/tropical_cyclone/gori/tc_ncep_reanal.hdf5
 """
 
-import re
 from __future__ import annotations
+import re
 import argparse
 import sys
 from pathlib import Path
