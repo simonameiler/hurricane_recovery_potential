@@ -23,7 +23,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import numpy as np
 
-from modules.hazard_funcs import (
+from modules.hazard_utils import (
     load_tc_hazard_from_wind_mats,
     _read_catalog_freq,   # uses track .mat to get scalar freq
 )

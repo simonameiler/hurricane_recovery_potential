@@ -24,7 +24,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import os
 
-from modules.hazard_funcs import load_tc_hazard_from_wind_mats
+from modules.hazard_utils import load_tc_hazard_from_wind_mats
 
 # base directory where hazard input files live
 haz_dir = Path("/home/groups/bakerjw/smeiler/climada_data/data/hazard")
