@@ -22,6 +22,29 @@ from climada.entity.impact_funcs import ImpactFuncSet, ImpactFunc
 import climada.util.coordinates as u_coord
 from climada.util import ureg
 
+# State FIPS codes
+state_fp_map = {
+    'Alabama': '01',
+    'Connecticut': '09',
+    'Delaware': '10',
+    'Florida': '12',
+    'Georgia': '13',
+    'Louisiana': '22',
+    'Maine': '23',
+    'Maryland': '24',
+    'Massachusetts': '25',
+    'Mississippi': '28',
+    'NewHampshire': '33',
+    'NewJersey': '34',
+    'NewYork': '36',
+    'NorthCarolina': '37',
+    'Pennsylvania': '42',
+    'RhodeIsland': '44',
+    'SouthCarolina': '45',
+    'Texas': '48',
+    'Virginia': '51'
+}
+
 def load_exposure_from_csv(csv_paths):
     """
     Load exposure data from multiple CSV files and return a combined CLIMADA Exposures object,
@@ -40,12 +63,19 @@ def load_exposure_from_csv(csv_paths):
     """
     # Load US counties shapefile for robust FIPS assignment
     counties_shp = Path(__file__).parent.parent / "data" / "US_counties.shp"
-    counties = gpd.read_file(counties_shp)[['STATEFP','COUNTYFP','GEOID','NAME','STATE_NAME','geometry']]
+    counties = gpd.read_file(counties_shp)[['STATEFP','COUNTYFP','GEOID','NAME','geometry']]
     if counties.crs is None:
         counties = counties.set_crs('EPSG:4326')
     else:
         counties = counties.to_crs('EPSG:4326')
     counties.sindex  # build spatial index
+    print(f"Loaded {len(counties)} counties from shapefile")
+    
+    # For Delaware, print available counties
+    delaware_counties = counties[counties['STATEFP'] == '10']
+    if not delaware_counties.empty:
+        print("Delaware counties in shapefile:", delaware_counties['NAME'].tolist())
+    
     gdf_list = []
 
     for csv_path in csv_paths:
@@ -83,27 +113,38 @@ def load_exposure_from_csv(csv_paths):
         # Create geometry
         df['geometry'] = [Point(xy) for xy in zip(df['Longitude'], df['Latitude'])]
 
-        # Add county and state info
-        df['County'] = county
-        df['State'] = state
-
-
-        # Assign stcode/ccode by spatial join to counties
+        # Create GeoDataFrame for spatial join
         gdf = gpd.GeoDataFrame(df, geometry='geometry', crs='EPSG:4326')
-        joined = gpd.sjoin(gdf, counties, how='left', predicate='within')
-        # Assign stcode and ccode from joined columns
-        gdf['stcode'] = joined['STATEFP']
-        gdf['ccode'] = joined['COUNTYFP']
-        # Optionally warn if any points did not match a county
-        n_unmatched = gdf['stcode'].isna().sum()
-        if n_unmatched > 0:
-            print(f"Warning: {n_unmatched} exposure points did not match any county polygon.")
+        
+        # Print info about points being processed
+        print(f"\nProcessing {state}/{county}: {len(gdf)} points")
+        
+        # Add state info - we know this from the folder structure
+        gdf['State'] = state
+        gdf['stcode'] = state_fp_map.get(state)
+        
+        # Add county name from filename
+        gdf['County'] = county
+        
+        # Do a spatial join just to get the county FIPS mapping for this state
+        state_counties = counties[counties['STATEFP'] == state_fp_map.get(state)]
+        # Create a mapping from county name to FIPS code
+        county_to_fips = state_counties.set_index('NAME')['COUNTYFP'].to_dict()
+        
+        # Try to get county code from the name-based mapping
+        try:
+            gdf['ccode'] = county_to_fips[county]
+            print(f"Assigned FIPS codes for {state}/{county}: stcode={gdf['stcode'].iloc[0]}, ccode={gdf['ccode'].iloc[0]}")
+        except KeyError:
+            print(f"Warning: Could not find FIPS code for {state}/{county} in counties shapefile")
+            gdf['ccode'] = None
+        
+        # Rename columns to match CLIMADA expectations
+        gdf = gdf.rename(columns={'Latitude': 'latitude', 'Longitude': 'longitude'})
+        gdf['value'] = 1
 
-    # Rename columns to match CLIMADA expectations
-    gdf = gdf.rename(columns={'Latitude': 'latitude', 'Longitude': 'longitude'})
-    gdf['value'] = 1
-
-    gdf_list.append(gdf)
+        # Append to our list of GeoDataFrames
+        gdf_list.append(gdf)
 
     if not gdf_list:
         raise ValueError("No valid exposure files loaded (all missing Latitude/Longitude or empty).")

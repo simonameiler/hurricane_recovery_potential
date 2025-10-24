@@ -7,37 +7,10 @@ from shapely.ops import unary_union
 # import CLIMADA modules:
 from climada.entity.exposures import Exposures
 
-from modules.exposure_utils import load_exposure_from_csv
+from modules.exposure_utils import load_exposure_from_csv, state_fp_map
 
 data_dir = Path('/home/groups/bakerjw/smeiler/climada_data/data')
 exp_dir = data_dir / 'exposure' / 'building_inventory_NAcoast'
-county_fp = Path(__file__).parent.parent / "data" / "US_counties.shp"
-
-# Load data
-counties = gpd.read_file(county_fp)
-
-# Example mapping of state names to STATEFP codes (add all you need!)
-state_fp_map = {
-    'Alabama': '01',
-    'Connecticut': '09',
-    'Delaware': '10',
-    'Florida': '12',
-    'Georgia': '13',
-    'Louisiana': '22',
-    'Maine': '23',
-    'Maryland': '24',
-    'Massachusetts': '25',
-    'Mississippi': '28',
-    'NewHampshire': '33',
-    'NewJersey': '34',
-    'NewYork': '36',
-    'NorthCarolina': '37',
-    'Pennsylvania': '42',
-    'RhodeIsland': '44',
-    'SouthCarolina': '45',
-    'Texas': '48',
-    'Virginia': '51'
-}
 
 state_list = list(state_fp_map.keys())
 
