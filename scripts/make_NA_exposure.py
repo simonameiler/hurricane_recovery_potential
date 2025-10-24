@@ -11,7 +11,7 @@ from modules.exposure_utils import load_exposure_from_csv
 
 data_dir = Path('/home/groups/bakerjw/smeiler/climada_data/data')
 exp_dir = data_dir / 'exposure' / 'NA_coast_exposure'
-county_fp = data_dir / 'US_counties.shp'
+county_fp = Path(__file__).parent.parent / "data" / "US_counties.shp"
 
 # Load data
 counties = gpd.read_file(county_fp)
