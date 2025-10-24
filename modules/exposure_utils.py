@@ -53,8 +53,16 @@ def load_exposure_from_csv(csv_paths):
     gdf_list = []
 
     for csv_path in csv_paths:
-        # Infer state and county name from path
+        # Skip incomplete_counties.csv files, but check if they have content
         path_obj = Path(csv_path)
+        if path_obj.name == "incomplete_counties.csv":
+            # Check if file has data beyond header
+            df_check = pd.read_csv(csv_path)
+            if len(df_check) > 0:
+                print(f"Warning: {csv_path} contains {len(df_check)} entries that will be ignored")
+            continue
+
+        # Infer state and county name from path
         state = path_obj.parent.name
         filename = path_obj.name
         county = filename.split('_')[0]  # assumes {County}_Inventory.csv
