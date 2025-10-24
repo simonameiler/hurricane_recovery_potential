@@ -10,9 +10,15 @@
 set -euo pipefail
 set -x
 
-module purge 2>/dev/null || true
-source ~/.bashrc
-conda activate climada_env
+# --- activate env ---
+CONDA_BASE="$(conda info --base 2>/dev/null || true)"
+if [[ -n "${CONDA_BASE}" && -f "${CONDA_BASE}/etc/profile.d/conda.sh" ]]; then
+  source "${CONDA_BASE}/etc/profile.d/conda.sh"
+  conda activate climada_env
+else
+  echo "Could not locate conda.sh via 'conda info --base'." >&2
+  exit 1
+fi
 
 # --- repo + imports ---
 REPO="$HOME/repos/hurricane_recovery_potential"
