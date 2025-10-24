@@ -10,7 +10,7 @@ from climada.entity.exposures import Exposures
 from modules.exposure_utils import load_exposure_from_csv
 
 data_dir = Path('/home/groups/bakerjw/smeiler/climada_data/data')
-exp_dir = data_dir / 'exposure' / 'NA_coast_exposure'
+exp_dir = data_dir / 'exposure' / 'building_inventory_NAcoast'
 county_fp = Path(__file__).parent.parent / "data" / "US_counties.shp"
 
 # Load data
@@ -50,4 +50,4 @@ for state in state_list:
 
 # Step 2: Load and combine exposures
 exp = load_exposure_from_csv(csv_files)
-exp.write_hdf5(exp_dir / 'NA_coast_exposure.hdf5')
+exp.write_hdf5(data_dir / 'exposure' / 'NA_coast_exposure.hdf5')
