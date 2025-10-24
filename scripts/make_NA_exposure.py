@@ -9,9 +9,7 @@ from climada.entity.exposures import Exposures
 
 from modules.exposure_utils import load_exposure_from_csv
 
-#exp_dir = Path("/home/groups/bakerjw/smeiler/climada_data/data/exposure")
-
-data_dir = Path('/Users/simonameiler/Documents/work/03_code/repos/hurricane_recovery_potential/data')
+data_dir = Path('/home/groups/bakerjw/smeiler/climada_data/data')
 exp_dir = data_dir / 'exposure' / 'NA_coast_exposure'
 county_fp = data_dir / 'US_counties.shp'
 
