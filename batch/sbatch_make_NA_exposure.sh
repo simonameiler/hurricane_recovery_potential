@@ -1,25 +1,18 @@
-#!/usr/bin/env bash
-#SBATCH -J hrp_exposure
-#SBATCH -t 08:00:00
-#SBATCH -N 1
-#SBATCH -n 4
-#SBATCH --mem=32G
-#SBATCH -o logs/%x-%j.out
-#SBATCH -e logs/%x-%j.err
-#SBATCH --hint=nomultithread
+#!/bin/bash
+#SBATCH --job-name=make_na_exposure
+#SBATCH --output=logs/make_na_exp_%j.log
+#SBATCH --error=logs/make_na_exp_%j.err
+#SBATCH --partition=normal
+#SBATCH --time=08:00:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=128G
 
 set -euo pipefail
 set -x
 
-# --- activate env ---
-CONDA_BASE="$(conda info --base 2>/dev/null || true)"
-if [[ -n "${CONDA_BASE}" && -f "${CONDA_BASE}/etc/profile.d/conda.sh" ]]; then
-  source "${CONDA_BASE}/etc/profile.d/conda.sh"
-  conda activate climada_env
-else
-  echo "Could not locate conda.sh via 'conda info --base'." >&2
-  exit 1
-fi
+module purge 2>/dev/null || true
+source ~/.bashrc
+conda activate climada_env
 
 # --- repo + imports ---
 REPO="$HOME/repos/hurricane_recovery_potential"

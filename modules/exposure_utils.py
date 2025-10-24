@@ -38,18 +38,14 @@ def load_exposure_from_csv(csv_paths):
     Exposures
         Combined CLIMADA-compatible Exposures object with state/county info, FIPS codes, and unique IDs.
     """
-    # Load county/state code mapping
-    mapping_file = Path(__file__).parent.parent / "data" / "selected_states_counties.csv"
-    if not mapping_file.exists():
-        raise FileNotFoundError(f"County/state code mapping file not found: {mapping_file}")
-    
-    mapping_df = pd.read_csv(mapping_file)
-    # Create lookup dict from state name + county name to FIPS codes
-    code_map = {}
-    for _, row in mapping_df.iterrows():
-        key = (row['STATE_NAME'].lower(), row['NAME'].lower())
-        code_map[key] = (row['STATEFP'], row['COUNTYFP'])
-    
+    # Load US counties shapefile for robust FIPS assignment
+    counties_shp = Path(__file__).parent.parent / "data" / "US_counties.shp"
+    counties = gpd.read_file(counties_shp)[['STATEFP','COUNTYFP','GEOID','NAME','STATE_NAME','geometry']]
+    if counties.crs is None:
+        counties = counties.set_crs('EPSG:4326')
+    else:
+        counties = counties.to_crs('EPSG:4326')
+    counties.sindex  # build spatial index
     gdf_list = []
 
     for csv_path in csv_paths:
@@ -91,25 +87,23 @@ def load_exposure_from_csv(csv_paths):
         df['County'] = county
         df['State'] = state
 
-        # Add FIPS codes from mapping
-        lookup_key = (state.lower(), county.lower())
-        if lookup_key in code_map:
-            stcode, ccode = code_map[lookup_key]
-            df['stcode'] = stcode
-            df['ccode'] = ccode
-        else:
-            print(f"Warning: No FIPS codes found for {state}, {county}")
-            df['stcode'] = None
-            df['ccode'] = None
 
-        # Convert to GeoDataFrame
+        # Assign stcode/ccode by spatial join to counties
         gdf = gpd.GeoDataFrame(df, geometry='geometry', crs='EPSG:4326')
+        joined = gpd.sjoin(gdf, counties, how='left', predicate='within')
+        # Assign stcode and ccode from joined columns
+        gdf['stcode'] = joined['STATEFP']
+        gdf['ccode'] = joined['COUNTYFP']
+        # Optionally warn if any points did not match a county
+        n_unmatched = gdf['stcode'].isna().sum()
+        if n_unmatched > 0:
+            print(f"Warning: {n_unmatched} exposure points did not match any county polygon.")
 
-        # Rename columns to match CLIMADA expectations
-        gdf = gdf.rename(columns={'Latitude': 'latitude', 'Longitude': 'longitude'})
-        gdf['value'] = 1
+    # Rename columns to match CLIMADA expectations
+    gdf = gdf.rename(columns={'Latitude': 'latitude', 'Longitude': 'longitude'})
+    gdf['value'] = 1
 
-        gdf_list.append(gdf)
+    gdf_list.append(gdf)
 
     if not gdf_list:
         raise ValueError("No valid exposure files loaded (all missing Latitude/Longitude or empty).")
