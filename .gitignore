@@ -9,6 +9,8 @@ results/
 logs/
 figures/
 reports/
+impacts_out/
+data/exposure/
 
 # Cluster / SLURM artifacts
 slurm-*.out
