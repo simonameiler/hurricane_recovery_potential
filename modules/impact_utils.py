@@ -179,6 +179,22 @@ def export_state_and_county_results_all_events(
         # compute scaling per affected
         fips_vals = full_all.loc[affected_idx, "fips"].to_numpy()
         scaling_for_build = np.ones(len(fips_vals), dtype=float)
+
+        # Determine which row in the scaling matrix corresponds to this event.
+        # Scaling NPZ typically indexes events by track number (e.g. '0001' -> row 0).
+        event_row_idx = None
+        try:
+            # if event names are numeric (e.g., '0312'), map to 0-based index
+            event_id_int = int(str(ev_name))
+            event_row_idx = int(event_id_int) - 1
+        except Exception:
+            # fallback: if ev_name is not numeric, we cannot map reliably
+            event_row_idx = None
+
+        if event_row_idx is not None and not (0 <= event_row_idx < scaling_matrix.shape[0]):
+            # scaling matrix has no row for this event (e.g., missing tracks); skip scaling
+            print(f"Scaling: no scaling row for event '{ev_name}' (row {event_row_idx}) — using 1.0")
+            event_row_idx = None
         if county_index_to_fips:
             fips_to_index = {v: k for k, v in county_index_to_fips.items()}
             for i, f in enumerate(fips_vals):
@@ -191,7 +207,10 @@ def export_state_and_county_results_all_events(
                 else:
                     if ci in county_indices:
                         pos = int(np.where(county_indices == ci)[0][0])
-                        scaling_for_build[i] = float(scaling_matrix[ev_idx, pos])
+                        if event_row_idx is not None:
+                            scaling_for_build[i] = float(scaling_matrix[event_row_idx, pos])
+                        else:
+                            scaling_for_build[i] = 1.0
         else:
             for i, f in enumerate(fips_vals):
                 try:
@@ -201,7 +220,10 @@ def export_state_and_county_results_all_events(
                     continue
                 if ci in county_indices:
                     pos = int(np.where(county_indices == ci)[0][0])
-                    scaling_for_build[i] = float(scaling_matrix[ev_idx, pos])
+                    if event_row_idx is not None:
+                        scaling_for_build[i] = float(scaling_matrix[event_row_idx, pos])
+                    else:
+                        scaling_for_build[i] = 1.0
 
         # compute scaled values from thresholded raw losses
         scaled_vals = compute_scaled_loss(loss_vals_thresh, scaling_for_build, kscale=k, mode=scale_mode)
