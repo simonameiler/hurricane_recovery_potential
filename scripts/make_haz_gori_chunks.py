@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import numpy as np
@@ -51,62 +52,97 @@ def _pick_chunk(files: list[Path], N: int, chunk_id: int) -> list[Path]:
     return files[start:end]
 
 
-def main(N: int, chunk_id: int | None = None) -> "Hazard":
-    """Build a Hazard object for a chunk of N events; returns the object (and writes HDF5)."""
-    if chunk_id is None:
-        # allow SLURM array usage without passing explicitly
-        sid = os.environ.get("SLURM_ARRAY_TASK_ID")
-        if sid is None:
-            raise ValueError("chunk_id not provided and SLURM_ARRAY_TASK_ID not set.")
-        chunk_id = int(sid)
+def main():
+    parser = argparse.ArgumentParser(description="Build chunked CLIMADA TC hazard (Gori et al. 2025).")
+    parser.add_argument("--chunk-size", type=int, default=250, help="Number of tracks per chunk")
+    parser.add_argument("--chunk-id", type=int, default=None, help="If set, only process this chunk id (zero-based)")
+    parser.add_argument("--mat-dir", type=str, default=str(MAT_DIR), help="Directory with .mat tracks")
+    args = parser.parse_args()
+    N = args.chunk_size
+    chunk_id = args.chunk_id
+    mat_dir = Path(args.mat_dir)
 
-    files_all = sorted(p for p in MAT_DIR.glob("*.mat") if p.is_file())
-    if not files_all:
-        raise FileNotFoundError(f"No .mat files in {MAT_DIR}")
+    # --- build index -> file mapping based on filename numeric id (preserve gaps) ---
+    files_by_index = {}
+    pat = re.compile(r'(\d+)\.mat$', re.IGNORECASE)
+    for p in sorted(mat_dir.glob("*.mat")):
+        m = pat.search(p.name)
+        if not m:
+            continue
+        num = int(m.group(1))
+        idx = num - 1  # explicit index based on filename number
+        files_by_index[idx] = p
 
-    subset = _pick_chunk(files_all, N=N, chunk_id=chunk_id)
-    print(
-        f"[HRP] chunk_id={chunk_id} | N={N} | using {len(subset)} files: "
-        f"{subset[0].name} .. {subset[-1].name}"
-    )
+    if not files_by_index:
+        print(f"[HRP] No .mat files found in {mat_dir}")
+        return
 
-    scratch = Path(os.environ.get("SCRATCH", "/tmp"))
+    # determine available index range for diagnostics (but keep indexing based on filename numbers)
+    min_idx = min(files_by_index.keys())
+    max_idx = max(files_by_index.keys())
+    total_possible = max_idx + 1
+    print(f"[HRP] Found {len(files_by_index)} .mat files with indices {min_idx}..{max_idx} (total slots {total_possible})")
 
-    # materialize a temp dir containing only this chunk via symlinks
-    with TemporaryDirectory(dir=scratch) as tmp:
-        tmp_dir = Path(tmp)
-        for fp in subset:
-            (tmp_dir / fp.name).symlink_to(fp)
+    # helper to get files for a given chunk id by index slots (preserve gaps)
+    def files_for_chunk(cid: int):
+        start = cid * N
+        end = start + N  # exclusive
+        selected = [files_by_index[i] for i in range(start, end) if i in files_by_index]
+        return selected, start, end - 1
 
-        # build hazard for this subset
-        haz = load_tc_hazard_from_wind_mats(
-            mat_dir=tmp_dir,
-            track_mat_path=TRACK_MAT_PATH,
-            resolution_deg=0.1,
-            pad_deg=1.0,
-        )
+    # If a specific chunk_id requested, process only that chunk
+    if chunk_id is not None:
+        subset, start_idx, end_idx = files_for_chunk(chunk_id)
+        if not subset:
+            print(f"[HRP] Chunk {chunk_id} (indices {start_idx}-{end_idx}) contains no existing .mat files -> nothing to do")
+            return
+        print(f"[HRP] chunk_id={chunk_id} | N={N} | using indices {start_idx}..{end_idx} with {len(subset)} existing files")
 
-    # ---- set per-event frequency = freq_scalar / TOTAL_STORMS (hard-coded total) ----
-    freq_scalar = _read_catalog_freq(TRACK_MAT_PATH)  # events/year scalar
-    per_event = float(freq_scalar) / float(TOTAL_STORMS)
-    haz.frequency = np.full(haz.event_id.size, per_event, dtype=float)
-    try:
-        haz.frequency_unit = "1/year"
-    except AttributeError:
-        pass
+        # materialize a temp dir containing only this chunk via symlinks
+        with TemporaryDirectory(dir=scratch) as tmp:
+            tmp_dir = Path(tmp)
+            for fp in subset:
+                (tmp_dir / fp.name).symlink_to(fp)
 
-    # tag & write
-    try:
-        haz.tag = f"gori_ncep_reanal_chunk{chunk_id}_N{N}"
-    except Exception:
-        pass
+                # build hazard for this subset
+                haz = load_tc_hazard_from_wind_mats(
+                    mat_dir=tmp_dir,
+                    track_mat_path=TRACK_MAT_PATH,
+                    resolution_deg=0.1,
+                    pad_deg=1.0,
+                )
 
-    out_path = OUT_DIR / f"tc_ncep_reanal_chunk{chunk_id}_N{N}.hdf5"
-    print(f"[HRP] writing HDF5 -> {out_path}")
-    haz.write_hdf5(out_path)
-    print("[HRP] done.")
+        # ---- set per-event frequency = freq_scalar / TOTAL_STORMS (hard-coded total) ----
+        freq_scalar = _read_catalog_freq(TRACK_MAT_PATH)  # events/year scalar
+        per_event = float(freq_scalar) / float(TOTAL_STORMS)
+        haz.frequency = np.full(haz.event_id.size, per_event, dtype=float)
+        try:
+            haz.frequency_unit = "1/year"
+        except AttributeError:
+            pass
 
-    return haz
+        # tag & write
+        try:
+            haz.tag = f"gori_ncep_reanal_chunk{chunk_id}_N{N}"
+        except Exception:
+            pass
+
+        out_path = OUT_DIR / f"tc_ncep_reanal_chunk{chunk_id}_N{N}.hdf5"
+        print(f"[HRP] writing HDF5 -> {out_path}")
+        haz.write_hdf5(out_path)
+        print("[HRP] done.")
+
+        return haz
+
+    # Otherwise process all chunks across the full index range (0..max_idx) in sequence
+    n_chunks = (max_idx // N) + 1
+    for cid in range(n_chunks):
+        subset, start_idx, end_idx = files_for_chunk(cid)
+        if not subset:
+            print(f"[HRP] skipping empty chunk {cid} (indices {start_idx}-{end_idx})")
+            continue
+        print(f"[HRP] chunk_id={cid} | N={N} | using indices {start_idx}..{end_idx} with {len(subset)} existing files")
+        process_chunk(subset, cid, N, out_dir=OUT_DIR)
 
 
 def _parse_args() -> argparse.Namespace:
