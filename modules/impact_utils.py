@@ -110,6 +110,7 @@ def export_state_and_county_results_all_events(
     k: float = 1.0,
     scale_mode: str = "compound",
     lower_threshold: float = 0.005,
+    write_per_building: bool = False,
 ):
     """
     Produce per-state per-building CSVs (all events) and a county-event aggregated CSV.
@@ -121,6 +122,7 @@ def export_state_and_county_results_all_events(
     county_region_path: optional mapping CSV for county_index -> stcode/ccode or fips
     out_dir: output directory
     k, scale_mode: scaling options (see attach_and_aggregate_scaled_impacts)
+    write_per_building: if True, write per-building CSVs (default False to save disk space)
     """
     os.makedirs(out_dir, exist_ok=True)
     per_state_dir = Path(out_dir) / "per_state"
@@ -244,18 +246,19 @@ def export_state_and_county_results_all_events(
         full_all.loc[affected_idx, scaled_col] = scaled_vals
         full_all.loc[affected_idx, repair_scaled_col] = scaled_vals * full_all.loc[affected_idx, "ReplacementCost"]
 
-        # write per-state per-event all_buildings files (same naming convention as attach_and_aggregate_scaled_impacts)
-        keep_cols = ["id", "fips", "stcode", "ccode", raw_col, scaled_col, repair_raw_col, repair_scaled_col, "NumberOfUnits"]
-        keep_cols = [c for c in keep_cols if c in full_all.columns]
-        if "stcode" in full_all.columns:
-            for st in full_all["stcode"].dropna().unique():
-                subset = full_all[full_all["stcode"] == st]
-                out_name = f"all_buildings_{str(st)}_{ev_name}.csv"
-                out_path = per_state_dir / out_name
-                subset[keep_cols].to_csv(out_path, index=False)
-        else:
-            out_path = per_state_dir / f"all_buildings_all_{ev_name}.csv"
-            full_all[keep_cols].to_csv(out_path, index=False)
+        # write per-state per-event all_buildings files (only if requested)
+        if write_per_building:
+            keep_cols = ["id", "fips", "stcode", "ccode", raw_col, scaled_col, repair_raw_col, repair_scaled_col, "NumberOfUnits"]
+            keep_cols = [c for c in keep_cols if c in full_all.columns]
+            if "stcode" in full_all.columns:
+                for st in full_all["stcode"].dropna().unique():
+                    subset = full_all[full_all["stcode"] == st]
+                    out_name = f"all_buildings_{str(st)}_{ev_name}.csv"
+                    out_path = per_state_dir / out_name
+                    subset[keep_cols].to_csv(out_path, index=False)
+            else:
+                out_path = per_state_dir / f"all_buildings_all_{ev_name}.csv"
+                full_all[keep_cols].to_csv(out_path, index=False)
 
         # aggregation per county for this event
         aff = pd.DataFrame({
