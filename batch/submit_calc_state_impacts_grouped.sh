@@ -43,9 +43,9 @@ GROUP_B=(georgia newyork northcarolina pennsylvania)
 GROUP_C=(florida texas)
 
 make_index_list() {
-  local -n names=$1
+  # Accepts state names as arguments (e.g. make_index_list "alabama" "florida")
   local idx_list=()
-  for want in "${names[@]}"; do
+  for want in "$@"; do
     wn=$(norm "$want")
     found=0
     for i in "${!STATE_NAMES[@]}"; do
@@ -76,9 +76,9 @@ submit_group() {
   sbatch --array=${idxs} --mem=${mem}G --job-name=calc_${name} "$SBATCH_SCRIPT"
 }
 
-IDX_A=$(make_index_list GROUP_A)
-IDX_B=$(make_index_list GROUP_B)
-IDX_C=$(make_index_list GROUP_C)
+IDX_A=$(make_index_list "${GROUP_A[@]}")
+IDX_B=$(make_index_list "${GROUP_B[@]}")
+IDX_C=$(make_index_list "${GROUP_C[@]}")
 
 # submit with chosen memory sizes (GB)
 submit_group "$IDX_A" 32 "groupA"
