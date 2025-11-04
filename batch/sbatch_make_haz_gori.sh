@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-#SBATCH -J hrp_haz_subset
-#SBATCH -t 04:00:00
+#SBATCH -J hrp_haz_all_events
+#SBATCH -t 12:00:00
 #SBATCH -N 1
-#SBATCH -n 4
-#SBATCH --mem=32G
+#SBATCH -n 1
+#SBATCH -c 8
+#SBATCH --mem=256G
 #SBATCH -o logs/%x-%j.out
 #SBATCH -e logs/%x-%j.err
-#SBATCH --hint=nomultithread
 
 set -euo pipefail
 set -x
@@ -31,10 +31,18 @@ export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
 export TMPDIR="${SCRATCH:-/tmp}"
 mkdir -p "$TMPDIR"
 
-# Optional: let you control subset size via env var SUBSET_N (if your script supports it)
-# export SUBSET_N="${SUBSET_N:-100}"
+# Thread control for numpy/scipy/etc
+export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
+export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
+export OPENBLAS_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
+export NUMEXPR_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
-which python
-python --version
+echo "Node: $(hostname)"
+echo "Date: $(date)"
+echo "Python: $(command -v python)  $(python --version)"
+echo "PYTHONPATH: $PYTHONPATH"
+echo "Memory allocated: 256G"
+echo "TMPDIR: $TMPDIR"
+
 python -u scripts/make_haz_gori.py
 
