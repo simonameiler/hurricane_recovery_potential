@@ -5,12 +5,14 @@
 
 # Results / logs / figures
 outputs/
+analysis_output/
 results/
 logs/
 figures/
 reports/
 impacts_out/
 data/exposure/
+data/hazard/
 
 # Cluster / SLURM artifacts
 slurm-*.out
