@@ -13,6 +13,7 @@ reports/
 impacts_out/
 data/exposure/
 data/hazard/
+data/recovery_potential/
 
 # Cluster / SLURM artifacts
 slurm-*.out
@@ -29,6 +30,7 @@ slurm-*.err
 *.grb2
 *.hdf
 *.zip
+*.json
 
 # OS/editor odds & ends
 .DS_Store
