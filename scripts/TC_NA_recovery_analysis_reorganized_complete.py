@@ -2187,6 +2187,1139 @@ def create_intervention_priority_maps(driver_analysis, per_event_analysis_median
 
 
 # ============================================================================
+# SECTION 7B: PER-COUNTY SENSITIVITY METRICS
+# ============================================================================
+
+def compute_county_sensitivity_metrics(recovery_all_events, units_df, capacity_df, 
+                                      output_dir="../analysis_output"):
+    """
+    Compute sensitivity metrics for each county based on their full event portfolio.
+    
+    For each county, computes:
+    1. Capacity Saturation Factor: Ratio of actual recovery to theoretical minimum (damage/capacity)
+    2. Damage State Profile: Which damage state (DS1-DS4) dominates recovery burden
+    3. Damage Quantiles: Where county ranks in damage distribution (tests if high saturation = extreme damage)
+    
+    This approach extracts patterns directly from ~27,000 event-county pairs without
+    overlaying statistical models. Each county's response to multiple events reveals
+    whether they respond linearly, have thresholds, or are chronically constrained.
+    
+    Parameters
+    ----------
+    recovery_all_events : DataFrame
+        Event-county recovery times with columns: event, fips, recovery_potential [months]
+    units_df : DataFrame
+        Event-county damage by DS with columns: event_name, fips, units_DS1-4_scaled
+    capacity_df : DataFrame
+        County capacity with columns: fips, construction_capacity
+    output_dir : str
+        Directory to save CSV output
+        
+    Returns
+    -------
+    sensitivity_df : DataFrame
+        Metrics per county with columns:
+        - fips: county identifier
+        - num_events: number of events county experienced
+        - recovery_elasticity: correlation(damage, recovery) across events
+        - saturation_factor_mean: mean(actual_recovery / theoretical_minimum)
+        - saturation_factor_std: std deviation of saturation factor
+        - dominant_ds: which DS (1-4) contributes most to total damage
+        - total_damage_mean: mean total damage across events
+        - recovery_mean: mean recovery time across events
+    """
+    print("\n" + "="*80)
+    print("COMPUTING COUNTY SENSITIVITY METRICS")
+    print("="*80)
+    
+    # Merge recovery and damage data
+    # Match on event and fips
+    recovery_events = recovery_all_events.copy()
+    units_df_copy = units_df.copy()
+    
+    # Ensure event column names match
+    if 'event' in recovery_events.columns and 'event_name' in units_df_copy.columns:
+        recovery_events = recovery_events.rename(columns={'event': 'event_name'})
+    elif 'event_name' in recovery_events.columns and 'event' in units_df_copy.columns:
+        units_df_copy = units_df_copy.rename(columns={'event': 'event_name'})
+    
+    # Ensure consistent data types for merge keys
+    # Convert event_name to string in both DataFrames
+    if 'event_name' in recovery_events.columns:
+        recovery_events['event_name'] = recovery_events['event_name'].astype(str)
+    if 'event_name' in units_df_copy.columns:
+        units_df_copy['event_name'] = units_df_copy['event_name'].astype(str)
+    
+    # Ensure fips is string in both DataFrames
+    recovery_events['fips'] = recovery_events['fips'].astype(str)
+    units_df_copy['fips'] = units_df_copy['fips'].astype(str)
+    
+    # Compute total damage per event-county
+    ds_cols = [c for c in units_df_copy.columns if 'units_DS' in c and 'scaled' in c]
+    units_df_copy['total_damage'] = units_df_copy[ds_cols].sum(axis=1)
+    
+    # DS-specific repair times (months per unit) for weighted damage
+    ds_repair_times = {
+        'units_DS1_scaled': 1.0,
+        'units_DS2_scaled': 1.0,
+        'units_DS3_scaled': 3.0,
+        'units_DS4_scaled': 6.0
+    }
+    
+    # Compute weighted damage: sum(DS_i_units * repair_time_per_unit)
+    units_df_copy['weighted_damage'] = sum(
+        units_df_copy[ds_col] * ds_repair_times[ds_col] 
+        for ds_col in ds_cols if ds_col in ds_repair_times
+    )
+    
+    # Merge recovery and damage
+    merged = recovery_events.merge(
+        units_df_copy[['event_name', 'fips', 'total_damage', 'weighted_damage'] + ds_cols],
+        on=['event_name', 'fips'],
+        how='inner'
+    )
+    
+    # Merge with capacity (ensure fips is string)
+    capacity_df_copy = capacity_df.copy()
+    capacity_df_copy['fips'] = capacity_df_copy['fips'].astype(str)
+    merged = merged.merge(
+        capacity_df_copy[['fips', 'construction_capacity']],
+        on='fips',
+        how='left'
+    )
+    
+    print(f"\nMerged data: {len(merged):,} event-county pairs")
+    print(f"Counties with data: {merged['fips'].nunique()}")
+    print(f"Counties with capacity data: {merged['construction_capacity'].notna().sum():,}")
+    
+    # Initialize results list
+    results = []
+    
+    # Minimum events required for reliable correlation
+    MIN_EVENTS_FOR_ELASTICITY = 5  # Need sufficient data for meaningful correlation
+    
+    # Process each county
+    counties = merged['fips'].unique()
+    print(f"\nProcessing {len(counties)} counties...")
+    print(f"Minimum events required for elasticity calculation: {MIN_EVENTS_FOR_ELASTICITY}")
+    
+    for fips in counties:
+        county_data = merged[merged['fips'] == fips].copy()
+        
+        # Count events
+        num_events = len(county_data)
+        
+        # Extract capacity (should be constant per county)
+        capacity = county_data['construction_capacity'].iloc[0]
+        
+        # 1. CAPACITY SATURATION FACTOR
+        # actual_recovery / theoretical_minimum where theoretical_minimum accounts for 
+        # DS-specific recovery times: DS1=1mo, DS2=1mo, DS3=3mo, DS4=6mo
+        # Note: weighted_damage already computed above when merging data
+        if pd.notna(capacity) and capacity > 0:
+            # Theoretical minimum = weighted_damage / capacity
+            county_data['theoretical_min'] = county_data['weighted_damage'] / capacity
+            county_data['saturation_factor'] = (
+                county_data['recovery_potential [months]'] / county_data['theoretical_min']
+            )
+            # Handle edge cases
+            county_data['saturation_factor'] = county_data['saturation_factor'].replace(
+                [np.inf, -np.inf], np.nan
+            )
+            saturation_mean = county_data['saturation_factor'].mean()
+            saturation_std = county_data['saturation_factor'].std()
+        else:
+            saturation_mean = np.nan
+            saturation_std = np.nan
+        
+        # 2. DOMINANT DAMAGE STATE
+        # Which DS contributes most to total damage across all events
+        ds_totals = county_data[ds_cols].sum()
+        if ds_totals.sum() > 0:
+            dominant_ds_col = ds_totals.idxmax()
+            # Extract DS number from column name (e.g., 'units_DS3_scaled' -> 3)
+            dominant_ds = int(dominant_ds_col.split('_DS')[1].split('_')[0])
+        else:
+            dominant_ds = np.nan
+        
+        # 3. DAMAGE STATISTICS
+        # Store mean and max damage for quantile calculation later
+        total_damage_mean = county_data['weighted_damage'].mean()
+        total_damage_max = county_data['weighted_damage'].max()
+        recovery_mean = county_data['recovery_potential [months]'].mean()
+        
+        results.append({
+            'fips': fips,
+            'num_events': num_events,
+            'saturation_factor_mean': saturation_mean,
+            'saturation_factor_std': saturation_std,
+            'dominant_ds': dominant_ds,
+            'weighted_damage_mean': total_damage_mean,
+            'weighted_damage_max': total_damage_max,
+            'recovery_mean': recovery_mean,
+            'construction_capacity': capacity
+        })
+    
+    sensitivity_df = pd.DataFrame(results)
+    
+    # Compute damage quantiles for each county
+    # This identifies whether high-saturation counties face extreme damage or are chronically constrained
+    sensitivity_df['damage_quantile_mean'] = sensitivity_df['weighted_damage_mean'].rank(pct=True)
+    sensitivity_df['damage_quantile_max'] = sensitivity_df['weighted_damage_max'].rank(pct=True)
+    
+    # Compute capacity quantiles
+    # This identifies whether high-saturation counties have low capacity or are simply overwhelmed
+    sensitivity_df['capacity_quantile'] = sensitivity_df['construction_capacity'].rank(pct=True)
+    
+    # Summary statistics
+    print("\n" + "="*80)
+    print("SENSITIVITY METRICS SUMMARY")
+    print("="*80)
+    print(f"\nTotal counties analyzed: {len(sensitivity_df)}")
+    print(f"Counties with saturation data: {sensitivity_df['saturation_factor_mean'].notna().sum()}")
+    
+    # Event count distribution
+    print(f"\nEvent count per county:")
+    print(f"  Mean: {sensitivity_df['num_events'].mean():.1f}")
+    print(f"  Median: {sensitivity_df['num_events'].median():.0f}")
+    print(f"  Min: {sensitivity_df['num_events'].min():.0f}")
+    print(f"  Max: {sensitivity_df['num_events'].max():.0f}")
+    
+    print("\nCapacity Saturation Factor Distribution:")
+    print(sensitivity_df['saturation_factor_mean'].describe())
+    
+    print("\nDamage Quantile Distribution (Mean):")
+    print(sensitivity_df['damage_quantile_mean'].describe())
+    
+    print("\nDominant Damage State Counts:")
+    print(sensitivity_df['dominant_ds'].value_counts().sort_index())
+    
+    # Test hypothesis: Are high-saturation counties damage-bottlenecked?
+    high_sat = sensitivity_df[sensitivity_df['saturation_factor_mean'] > 5]
+    if len(high_sat) > 0:
+        print(f"\nHigh-Saturation Counties (>5x):")
+        print(f"  Count: {len(high_sat)}")
+        print(f"  Mean damage quantile: {high_sat['damage_quantile_mean'].mean():.2f}")
+        print(f"  Median damage quantile: {high_sat['damage_quantile_mean'].median():.2f}")
+        print(f"  Counties in top 25% damage: {(high_sat['damage_quantile_mean'] > 0.75).sum()}")
+        print(f"  Counties in bottom 50% damage: {(high_sat['damage_quantile_mean'] <= 0.5).sum()}")
+    
+    # Save to CSV
+    output_path = Path(output_dir) / "county_sensitivity_metrics.csv"
+    sensitivity_df.to_csv(output_path, index=False)
+    print(f"\nSaved sensitivity metrics to: {output_path}")
+    
+    return sensitivity_df
+
+
+def create_sensitivity_metrics_maps(sensitivity_df, coastal_counties, 
+                                   output_dir="../analysis_output"):
+    """
+    Create 3-panel spatial visualization of county sensitivity metrics.
+    
+    Panel 1: Damage State Profile
+        - Categorical map showing which DS (1-4) drives recovery burden
+        - DS4 (Complete): Most severe damage dominates
+        - DS3 (Extensive): Major damage drives recovery
+        - DS1-2: Minor damage drives recovery (unusual, suggests resilient county)
+    
+    Panel 2: Capacity Saturation Factor
+        - Values ~1.0: Pure permit constraint, recovery = damage / capacity
+        - Values 2-5: Moderate saturation, other factors contribute
+        - Values >5: Severe saturation, non-permit bottlenecks dominate
+        
+    Panel 3: Damage Quantile (Max)
+        - Shows where county ranks in maximum damage distribution (0=lowest, 1=highest)
+        - High quantile = Counties that experienced extreme damage events
+        - Low quantile = Counties with relatively moderate maximum damage
+    
+    Parameters
+    ----------
+    sensitivity_df : DataFrame
+        County metrics from compute_county_sensitivity_metrics()
+    coastal_counties : GeoDataFrame
+        County geometries for mapping
+    output_dir : str
+        Directory to save figure
+    """
+    print("\n" + "="*80)
+    print("CREATING SENSITIVITY METRICS MAPS")
+    print("="*80)
+    
+    # Merge sensitivity metrics with geometries
+    gdf = coastal_counties.merge(
+        sensitivity_df,
+        left_on='GEOID',
+        right_on='fips',
+        how='left'
+    )
+    
+    # Create figure with 3 panels
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4), gridspec_kw={'wspace': 0.3})
+    
+    # ========== PANEL 1: DAMAGE STATE PROFILE ==========
+    ax = axes[0]
+    
+    gdf_with_data_ds = gdf[gdf['dominant_ds'].notna()]
+    
+    if len(gdf_with_data_ds) > 0:
+        # Create categorical colormap
+        ds_colors = {
+            1: '#d4e6f1',  # Light blue - minor damage
+            2: '#f9e79f',  # Light yellow - moderate damage
+            3: '#f8b878',  # Orange - extensive damage
+            4: '#e74c3c'   # Red - complete damage
+        }
+        
+        # Plot each damage state separately
+        for ds in sorted(gdf_with_data_ds['dominant_ds'].unique()):
+            gdf_ds = gdf_with_data_ds[gdf_with_data_ds['dominant_ds'] == ds]
+            gdf_ds.plot(
+                ax=ax,
+                color=ds_colors.get(ds, 'gray'),
+                edgecolor='0.5',
+                linewidth=0.1
+            )
+        
+        # Create manual legend with proper colors
+        legend_elements = [Patch(facecolor=ds_colors[ds], edgecolor='0.5', label=f'DS{int(ds)}') 
+                          for ds in sorted(gdf_with_data_ds['dominant_ds'].unique())]
+        ax.legend(
+            handles=legend_elements,
+            title='Dominant\nDamage State',
+            loc='center left',
+            bbox_to_anchor=(1.02, 0.5),
+            frameon=True,
+            fancybox=False,
+            shadow=False,
+            title_fontsize=9,
+            fontsize=9
+        )
+    
+    gdf[gdf['dominant_ds'].isna()].plot(
+        ax=ax,
+        color='white',
+        edgecolor='0.5',
+        linewidth=0.1
+    )
+    
+    ax.set_title('Damage State Profile', fontsize=12, pad=10)
+    ax.axis('off')
+    
+    # ========== PANEL 2: CAPACITY SATURATION FACTOR ==========
+    ax = axes[1]
+    
+    gdf_with_data = gdf[gdf['saturation_factor_mean'].notna()]
+    
+    if len(gdf_with_data) > 0:
+        # Cap at reasonable upper limit for visualization
+        gdf_plot = gdf_with_data.copy()
+        gdf_plot['saturation_capped'] = gdf_plot['saturation_factor_mean'].clip(upper=10)
+        
+        vmin = 1.0  # Theoretical minimum
+        vmax = gdf_plot['saturation_capped'].quantile(0.95)
+        
+        cax2 = ax.figure.add_axes([0.62, 0.30, 0.01, 0.35])
+        gdf_plot.plot(
+            column='saturation_capped',
+            ax=ax,
+            cmap='plasma',
+            vmin=vmin,
+            vmax=vmax,
+            edgecolor='0.5',
+            linewidth=0.1,
+            legend=True,
+            legend_kwds={
+                'label': 'Saturation Factor',
+                'shrink': 0.8
+            },
+            cax=cax2
+        )
+        # Make colorbar outline black
+        for spine in cax2.spines.values():
+            spine.set_edgecolor('black')
+            spine.set_linewidth(0.5)
+    
+    gdf[gdf['saturation_factor_mean'].isna()].plot(
+        ax=ax,
+        color='white',
+        edgecolor='0.5',
+        linewidth=0.1
+    )
+    
+    ax.set_title('Capacity Saturation Factor', fontsize=12, pad=10)
+    ax.axis('off')
+    
+    # ========== PANEL 3: DAMAGE QUANTILE (MAX) ==========
+    ax = axes[2]
+    
+    gdf_with_data_dq = gdf[gdf['damage_quantile_max'].notna()]
+    
+    if len(gdf_with_data_dq) > 0:
+        gdf_with_data_dq.plot(
+            column='damage_quantile_max',
+            ax=ax,
+            cmap='YlOrRd',
+            edgecolor='black',
+            linewidth=0.3,
+            legend=False,
+            vmin=0,
+            vmax=1
+        )
+        
+        # Add colorbar
+        sm = plt.cm.ScalarMappable(
+            cmap='YlOrRd',
+            norm=plt.Normalize(vmin=0, vmax=1)
+        )
+        sm._A = []
+        cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
+        cbar.set_label('Damage Quantile (Max)', fontsize=9)
+        cbar.ax.tick_params(labelsize=8)
+        cbar.outline.set_edgecolor('black')
+        cbar.outline.set_linewidth(1)
+    
+    ax.set_title('Maximum Damage Quantile', fontsize=12, pad=10)
+    ax.axis('off')
+    
+    # Adjust layout
+    #plt.tight_layout()
+    
+    # Save figure
+    output_path = Path(output_dir) / "county_sensitivity_metrics_maps.png"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+    print(f"\nSaved sensitivity metrics maps to: {output_path}")
+    
+    plt.close()
+    
+    # Print summary statistics
+    print("\n" + "="*80)
+    print("SPATIAL DISTRIBUTION SUMMARY")
+    print("="*80)
+    
+    print(f"\nCounties mapped: {len(gdf_with_data_ds)}")
+    print(f"Counties with DS profile: {gdf['dominant_ds'].notna().sum()}")
+    print(f"Counties with saturation: {gdf['saturation_factor_mean'].notna().sum()}")
+    print(f"Counties with damage quantile (max): {gdf['damage_quantile_max'].notna().sum()}")
+
+
+def create_saturation_damage_scatterplot(sensitivity_df, output_dir="../analysis_output"):
+    """
+    Create scatterplot with marginal distributions showing relationship between
+    capacity saturation and damage quantile.
+    
+    Tests hypothesis: Are high-saturation counties facing extreme damage (overwhelmed)
+    or moderate damage (chronically constrained)?
+    
+    Parameters
+    ----------
+    sensitivity_df : DataFrame
+        County metrics from compute_county_sensitivity_metrics()
+    output_dir : str
+        Directory to save figure
+    """
+    print("\n" + "="*80)
+    print("CREATING SATURATION-DAMAGE SCATTERPLOT WITH MARGINALS")
+    print("="*80)
+    
+    # Prepare data
+    plot_df = sensitivity_df[
+        sensitivity_df['saturation_factor_mean'].notna() & 
+        sensitivity_df['damage_quantile_mean'].notna()
+    ].copy()
+    
+    if len(plot_df) == 0:
+        print("No data available for scatterplot")
+        return
+    
+    # Define colors for damage states
+    ds_colors = {
+        1: '#d4e6f1',  # Light blue
+        2: '#f9e79f',  # Light yellow
+        3: '#f8b878',  # Orange
+        4: '#e74c3c'   # Red
+    }
+    
+    # Cap saturation for visualization
+    plot_df['saturation_capped'] = plot_df['saturation_factor_mean'].clip(upper=20)
+    
+    # Create figure with gridspec for marginal plots
+    fig = plt.figure(figsize=(10, 8))
+    gs = fig.add_gridspec(3, 3, hspace=0.05, wspace=0.05, 
+                          height_ratios=[1, 4, 0.2], width_ratios=[4, 1, 0.2])
+    
+    # Main scatterplot
+    ax_main = fig.add_subplot(gs[1, 0])
+    
+    # Plot all counties by DS
+    for ds in sorted(plot_df['dominant_ds'].dropna().unique()):
+        ds_data = plot_df[plot_df['dominant_ds'] == ds]
+        ax_main.scatter(
+            ds_data['damage_quantile_mean'],
+            ds_data['saturation_capped'],
+            c=ds_colors.get(ds, 'gray'),
+            s=40,
+            alpha=0.6,
+            edgecolors='black',
+            linewidth=0.5,
+            label=f'DS{int(ds)}'
+        )
+    
+    # Highlight high-saturation counties (>5)
+    high_sat = plot_df[plot_df['saturation_factor_mean'] > 5]
+    if len(high_sat) > 0:
+        ax_main.scatter(
+            high_sat['damage_quantile_mean'],
+            high_sat['saturation_capped'],
+            s=100,
+            facecolors='none',
+            edgecolors='red',
+            linewidth=2.5,
+            label='High Saturation (>5x)',
+            zorder=10
+        )
+    
+    # Add reference lines
+    ax_main.axhline(y=1.0, color='gray', linestyle='--', linewidth=1.5, alpha=0.7, 
+                    label='Theoretical Min', zorder=0)
+    ax_main.axvline(x=0.5, color='gray', linestyle=':', linewidth=1, alpha=0.3)
+    ax_main.axhline(y=5.0, color='gray', linestyle=':', linewidth=1, alpha=0.3)
+    
+    ax_main.set_xlabel('Damage Quantile (Mean)', fontsize=11)
+    ax_main.set_ylabel('Capacity Saturation Factor', fontsize=11)
+    ax_main.set_xlim(-0.05, 1.05)
+    ax_main.set_ylim(0.7, min(20, plot_df['saturation_capped'].max() * 1.1))
+    ax_main.set_yscale('log')
+    ax_main.grid(True, alpha=0.2, linestyle='-', linewidth=0.5)
+    ax_main.legend(loc='upper left', fontsize=9, frameon=True, fancybox=False, 
+                   framealpha=0.9, edgecolor='black')
+    
+    # Add quadrant labels
+    ax_main.text(0.25, 12, 'Chronically\nConstrained', fontsize=9, alpha=0.4, 
+                ha='center', va='center', style='italic')
+    ax_main.text(0.75, 12, 'Overwhelmed\nby Magnitude', fontsize=9, alpha=0.4, 
+                ha='center', va='center', style='italic')
+    
+    # Top marginal: histogram of damage quantiles
+    ax_top = fig.add_subplot(gs[0, 0], sharex=ax_main)
+    ax_top.hist(plot_df['damage_quantile_mean'], bins=30, color='steelblue', 
+                alpha=0.6, edgecolor='black', linewidth=0.5)
+    ax_top.set_ylabel('Count', fontsize=9)
+    ax_top.tick_params(labelbottom=False, labelsize=8)
+    ax_top.grid(True, alpha=0.2, axis='y')
+    
+    # Right marginal: histogram of saturation (log scale)
+    ax_right = fig.add_subplot(gs[1, 1], sharey=ax_main)
+    ax_right.hist(np.log10(plot_df['saturation_capped']), bins=30, 
+                  orientation='horizontal', color='coral', alpha=0.6, 
+                  edgecolor='black', linewidth=0.5)
+    ax_right.set_xlabel('Count', fontsize=9)
+    ax_right.tick_params(labelleft=False, labelsize=8)
+    ax_right.grid(True, alpha=0.2, axis='x')
+    
+    # Save figure
+    output_path = Path(output_dir) / "saturation_damage_scatterplot_marginals.png"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+    print(f"\nSaved scatterplot with marginals to: {output_path}")
+    plt.close()
+
+
+def create_saturation_damage_violinplot(sensitivity_df, output_dir="../analysis_output"):
+    """
+    Create violin plot showing distribution of saturation factors across damage quantile bins.
+    
+    Shows how saturation distribution changes with damage severity and reveals
+    bimodal patterns (chronically constrained vs overwhelmed).
+    
+    Parameters
+    ----------
+    sensitivity_df : DataFrame
+        County metrics from compute_county_sensitivity_metrics()
+    output_dir : str
+        Directory to save figure
+    """
+    print("\n" + "="*80)
+    print("CREATING SATURATION DISTRIBUTION BY DAMAGE BINS")
+    print("="*80)
+    
+    # Prepare data
+    plot_df = sensitivity_df[
+        sensitivity_df['saturation_factor_mean'].notna() & 
+        sensitivity_df['damage_quantile_mean'].notna()
+    ].copy()
+    
+    if len(plot_df) == 0:
+        print("No data available for violin plot")
+        return
+    
+    # Create damage bins
+    plot_df['damage_bin'] = pd.cut(
+        plot_df['damage_quantile_mean'],
+        bins=[0, 0.25, 0.5, 0.75, 1.0],
+        labels=['0-25%', '25-50%', '50-75%', '75-100%'],
+        include_lowest=True
+    )
+    
+    # Cap saturation for visualization
+    plot_df['saturation_capped'] = plot_df['saturation_factor_mean'].clip(upper=20)
+    
+    # Create figure
+    fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+    
+    # Prepare data for violin plot
+    data_by_bin = [plot_df[plot_df['damage_bin'] == bin_label]['saturation_capped'].dropna().values
+                   for bin_label in ['0-25%', '25-50%', '50-75%', '75-100%']]
+    
+    # Create violin plot
+    parts = ax.violinplot(
+        data_by_bin,
+        positions=[1, 2, 3, 4],
+        widths=0.7,
+        showmeans=True,
+        showmedians=True,
+        showextrema=True
+    )
+    
+    # Customize violin colors
+    for i, pc in enumerate(parts['bodies']):
+        pc.set_facecolor(['#d4e6f1', '#f9e79f', '#f8b878', '#e74c3c'][i])
+        pc.set_alpha(0.6)
+        pc.set_edgecolor('black')
+        pc.set_linewidth(1)
+    
+    # Customize other elements
+    for partname in ('cbars', 'cmins', 'cmaxes', 'cmedians', 'cmeans'):
+        if partname in parts:
+            parts[partname].set_edgecolor('black')
+            parts[partname].set_linewidth(1.5)
+    
+    # Add reference line at saturation = 1
+    ax.axhline(y=1.0, color='gray', linestyle='--', linewidth=1.5, alpha=0.7, 
+               label='Theoretical Minimum', zorder=0)
+    ax.axhline(y=5.0, color='red', linestyle=':', linewidth=1.5, alpha=0.5, 
+               label='High Saturation Threshold', zorder=0)
+    
+    ax.set_xlabel('Damage Quantile Bin', fontsize=12)
+    ax.set_ylabel('Capacity Saturation Factor', fontsize=12)
+    ax.set_title('Distribution of Saturation Across Damage Severity', fontsize=13, pad=15)
+    ax.set_xticks([1, 2, 3, 4])
+    ax.set_xticklabels(['Low\n(0-25%)', 'Moderate\n(25-50%)', 'High\n(50-75%)', 'Extreme\n(75-100%)'])
+    ax.set_yscale('log')
+    ax.set_ylim(0.7, 20)
+    ax.grid(True, alpha=0.2, axis='y')
+    ax.legend(loc='upper left', fontsize=10, frameon=True, fancybox=False, 
+              framealpha=0.9, edgecolor='black')
+    
+    # Add sample size annotations
+    for i, bin_label in enumerate(['0-25%', '25-50%', '50-75%', '75-100%']):
+        n = len(plot_df[plot_df['damage_bin'] == bin_label])
+        ax.text(i+1, 0.75, f'n={n}', ha='center', fontsize=8, style='italic')
+    
+    # Save figure
+    output_path = Path(output_dir) / "saturation_damage_violinplot.png"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+    print(f"\nSaved violin plot to: {output_path}")
+    plt.close()
+
+
+def create_saturation_comparison_scatterplots(sensitivity_df, output_dir="../analysis_output"):
+    """
+    Create side-by-side scatterplots showing saturation against damage and capacity quantiles.
+    
+    Panel 1: Saturation vs Damage Quantile - Tests if high saturation is due to extreme damage
+    Panel 2: Saturation vs Capacity Quantile - Tests if high saturation is due to low capacity
+    
+    Parameters
+    ----------
+    sensitivity_df : DataFrame
+        County metrics from compute_county_sensitivity_metrics()
+    output_dir : str
+        Directory to save figure
+    """
+    print("\n" + "="*80)
+    print("CREATING SATURATION COMPARISON SCATTERPLOTS")
+    print("="*80)
+    
+    # Prepare data
+    plot_df = sensitivity_df[
+        sensitivity_df['saturation_factor_mean'].notna() & 
+        sensitivity_df['damage_quantile_mean'].notna() &
+        sensitivity_df['capacity_quantile'].notna()
+    ].copy()
+    
+    if len(plot_df) == 0:
+        print("No data available for comparison scatterplots")
+        return
+    
+    # Define colors for damage states
+    ds_colors = {
+        1: '#d4e6f1',  # Light blue
+        2: '#f9e79f',  # Light yellow
+        3: '#f8b878',  # Orange
+        4: '#e74c3c'   # Red
+    }
+    
+    # Cap saturation for visualization
+    plot_df['saturation_capped'] = plot_df['saturation_factor_mean'].clip(upper=20)
+    
+    # Create figure with 2 panels side by side
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    
+    # ========== PANEL 1: SATURATION VS DAMAGE QUANTILE ==========
+    ax = axes[0]
+    
+    # Plot all counties by DS
+    for ds in sorted(plot_df['dominant_ds'].dropna().unique()):
+        ds_data = plot_df[plot_df['dominant_ds'] == ds]
+        ax.scatter(
+            ds_data['damage_quantile_mean'],
+            ds_data['saturation_capped'],
+            c=ds_colors.get(ds, 'gray'),
+            s=40,
+            alpha=0.6,
+            edgecolors='black',
+            linewidth=0.5,
+            label=f'DS{int(ds)}'
+        )
+    
+    # Highlight high-saturation counties (>5)
+    high_sat = plot_df[plot_df['saturation_factor_mean'] > 5]
+    if len(high_sat) > 0:
+        ax.scatter(
+            high_sat['damage_quantile_mean'],
+            high_sat['saturation_capped'],
+            s=100,
+            facecolors='none',
+            edgecolors='red',
+            linewidth=2.5,
+            label='High Saturation (>5x)',
+            zorder=10
+        )
+    
+    # Add reference lines
+    ax.axhline(y=1.0, color='gray', linestyle='--', linewidth=1.5, alpha=0.7, 
+               label='Theoretical Min', zorder=0)
+    ax.axvline(x=0.5, color='gray', linestyle=':', linewidth=1, alpha=0.3)
+    ax.axhline(y=5.0, color='gray', linestyle=':', linewidth=1, alpha=0.3)
+    
+    ax.set_xlabel('Damage Quantile (Mean)', fontsize=12)
+    ax.set_ylabel('Capacity Saturation Factor', fontsize=12)
+    ax.set_title('(A) Saturation vs. Damage Severity', fontsize=13, pad=15, fontweight='bold')
+    ax.set_xlim(-0.05, 1.05)
+    ax.set_ylim(0.7, min(20, plot_df['saturation_capped'].max() * 1.1))
+    ax.set_yscale('log')
+    ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.5)
+    ax.legend(loc='upper left', fontsize=9, frameon=True, fancybox=False, 
+              framealpha=0.9, edgecolor='black')
+    
+    # Add quadrant labels
+    ax.text(0.25, 12, 'Chronically\nConstrained', fontsize=9, alpha=0.4, 
+           ha='center', va='center', style='italic')
+    ax.text(0.75, 12, 'Overwhelmed\nby Damage', fontsize=9, alpha=0.4, 
+           ha='center', va='center', style='italic')
+    
+    # ========== PANEL 2: SATURATION VS CAPACITY QUANTILE ==========
+    ax = axes[1]
+    
+    # Plot all counties by DS
+    for ds in sorted(plot_df['dominant_ds'].dropna().unique()):
+        ds_data = plot_df[plot_df['dominant_ds'] == ds]
+        ax.scatter(
+            ds_data['capacity_quantile'],
+            ds_data['saturation_capped'],
+            c=ds_colors.get(ds, 'gray'),
+            s=40,
+            alpha=0.6,
+            edgecolors='black',
+            linewidth=0.5,
+            label=f'DS{int(ds)}'
+        )
+    
+    # Highlight high-saturation counties (>5)
+    if len(high_sat) > 0:
+        ax.scatter(
+            high_sat['capacity_quantile'],
+            high_sat['saturation_capped'],
+            s=100,
+            facecolors='none',
+            edgecolors='red',
+            linewidth=2.5,
+            label='High Saturation (>5x)',
+            zorder=10
+        )
+    
+    # Add reference lines
+    ax.axhline(y=1.0, color='gray', linestyle='--', linewidth=1.5, alpha=0.7, 
+               label='Theoretical Min', zorder=0)
+    ax.axvline(x=0.5, color='gray', linestyle=':', linewidth=1, alpha=0.3)
+    ax.axhline(y=5.0, color='gray', linestyle=':', linewidth=1, alpha=0.3)
+    
+    ax.set_xlabel('Capacity Quantile (Permit Capacity)', fontsize=12)
+    ax.set_ylabel('Capacity Saturation Factor', fontsize=12)
+    ax.set_title('(B) Saturation vs. Capacity Level', fontsize=13, pad=15, fontweight='bold')
+    ax.set_xlim(-0.05, 1.05)
+    ax.set_ylim(0.7, min(20, plot_df['saturation_capped'].max() * 1.1))
+    ax.set_yscale('log')
+    ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.5)
+    ax.legend(loc='upper right', fontsize=9, frameon=True, fancybox=False, 
+              framealpha=0.9, edgecolor='black')
+    
+    # Add quadrant labels
+    ax.text(0.25, 12, 'Low Capacity\nSaturated', fontsize=9, alpha=0.4, 
+           ha='center', va='center', style='italic')
+    ax.text(0.75, 12, 'High Capacity\nSaturated', fontsize=9, alpha=0.4, 
+           ha='center', va='center', style='italic')
+    
+    plt.tight_layout()
+    
+    # Save figure
+    output_path = Path(output_dir) / "saturation_comparison_scatterplots.png"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+    print(f"\nSaved comparison scatterplots to: {output_path}")
+    plt.close()
+
+
+def create_elasticity_comparison_maps(sensitivity_df, coastal_counties, output_dir="../analysis_output"):
+    """
+    Create 3-panel comparison of elasticity metrics to visualize impact of DS-weighting.
+    
+    Compares unweighted vs. weighted elasticity to show how much damage state composition
+    explains apparent non-linearity in recovery responses.
+    
+    Panel 1: Unweighted Elasticity
+        - correlation(total_units, recovery_time)
+        - Counterfactual: treats all DS equally
+    
+    Panel 2: Weighted Elasticity  
+        - correlation(DS-normalized_damage, recovery_time)
+        - Aligned with how recovery was computed
+    
+    Panel 3: Elasticity Improvement
+        - Difference: weighted - unweighted
+        - Shows where DS composition was masking linearity
+    
+    Parameters
+    ----------
+    sensitivity_df : DataFrame
+        County metrics from compute_county_sensitivity_metrics()
+    coastal_counties : GeoDataFrame
+        County geometries for mapping
+    output_dir : str
+        Directory to save figure
+    """
+    print("\n" + "="*80)
+    print("CREATING ELASTICITY COMPARISON MAPS")
+    print("="*80)
+    
+    # Merge sensitivity metrics with geometries
+    gdf = coastal_counties.merge(
+        sensitivity_df,
+        left_on='GEOID',
+        right_on='fips',
+        how='left'
+    )
+    
+    # Create figure with 3 panels
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4), gridspec_kw={'wspace': 0.3})
+    
+    # ========== PANEL 1: UNWEIGHTED ELASTICITY ==========
+    ax = axes[0]
+    
+    gdf_with_data = gdf[gdf['recovery_elasticity_unweighted'].notna()]
+    
+    if len(gdf_with_data) > 0:
+        vmin, vmax = 0.0, 1.0
+        
+        cax1 = ax.figure.add_axes([0.29, 0.30, 0.01, 0.35])
+        gdf_with_data.plot(
+            column='recovery_elasticity_unweighted',
+            ax=ax,
+            cmap='RdYlGn_r',
+            vmin=vmin,
+            vmax=vmax,
+            edgecolor='0.5',
+            linewidth=0.1,
+            legend=True,
+            legend_kwds={'label': 'Elasticity (Unweighted)', 'shrink': 0.8},
+            cax=cax1
+        )
+        for spine in cax1.spines.values():
+            spine.set_edgecolor('black')
+            spine.set_linewidth(0.5)
+    
+    gdf[gdf['recovery_elasticity_unweighted'].isna()].plot(
+        ax=ax, color='white', edgecolor='0.5', linewidth=0.1
+    )
+    
+    ax.set_title('Unweighted Elasticity\n(All DS Equal)', fontsize=12, pad=10)
+    ax.axis('off')
+    
+    # ========== PANEL 2: WEIGHTED ELASTICITY ==========
+    ax = axes[1]
+    
+    gdf_with_data = gdf[gdf['recovery_elasticity_weighted'].notna()]
+    
+    if len(gdf_with_data) > 0:
+        vmin, vmax = 0.0, 1.0
+        
+        cax2 = ax.figure.add_axes([0.62, 0.30, 0.01, 0.35])
+        gdf_with_data.plot(
+            column='recovery_elasticity_weighted',
+            ax=ax,
+            cmap='RdYlGn_r',
+            vmin=vmin,
+            vmax=vmax,
+            edgecolor='0.5',
+            linewidth=0.1,
+            legend=True,
+            legend_kwds={'label': 'Elasticity (Weighted)', 'shrink': 0.8},
+            cax=cax2
+        )
+        for spine in cax2.spines.values():
+            spine.set_edgecolor('black')
+            spine.set_linewidth(0.5)
+    
+    gdf[gdf['recovery_elasticity_weighted'].isna()].plot(
+        ax=ax, color='white', edgecolor='0.5', linewidth=0.1
+    )
+    
+    ax.set_title('Weighted Elasticity\n(DS-Specific Times)', fontsize=12, pad=10)
+    ax.axis('off')
+    
+    # ========== PANEL 3: ELASTICITY IMPROVEMENT ==========
+    ax = axes[2]
+    
+    gdf_with_data = gdf[gdf['elasticity_improvement'].notna()]
+    
+    if len(gdf_with_data) > 0:
+        # Use diverging colormap centered at 0
+        abs_max = gdf_with_data['elasticity_improvement'].abs().max()
+        vmin, vmax = -abs_max, abs_max
+        
+        cax3 = ax.figure.add_axes([0.95, 0.30, 0.01, 0.35])
+        gdf_with_data.plot(
+            column='elasticity_improvement',
+            ax=ax,
+            cmap='RdBu',  # Red = negative (weighted worse), Blue = positive (weighted better)
+            vmin=vmin,
+            vmax=vmax,
+            edgecolor='0.5',
+            linewidth=0.1,
+            legend=True,
+            legend_kwds={'label': 'Improvement (Weighted - Unweighted)', 'shrink': 0.8},
+            cax=cax3
+        )
+        for spine in cax3.spines.values():
+            spine.set_edgecolor('black')
+            spine.set_linewidth(0.5)
+    
+    gdf[gdf['elasticity_improvement'].isna()].plot(
+        ax=ax, color='white', edgecolor='0.5', linewidth=0.1
+    )
+    
+    ax.set_title('Elasticity Improvement\n(Weighted - Unweighted)', fontsize=12, pad=10)
+    ax.axis('off')
+    
+    # Save figure
+    output_path = Path(output_dir) / "elasticity_comparison_maps.png"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+    print(f"\nSaved elasticity comparison maps to: {output_path}")
+    
+    plt.close()
+    
+    # Print summary statistics
+    print("\n" + "="*80)
+    print("ELASTICITY COMPARISON SUMMARY")
+    print("="*80)
+    
+    print(f"\nCounties with both metrics: {gdf['elasticity_improvement'].notna().sum()}")
+    print(f"Mean unweighted elasticity: {gdf['recovery_elasticity_unweighted'].mean():.4f}")
+    print(f"Mean weighted elasticity: {gdf['recovery_elasticity_weighted'].mean():.4f}")
+    print(f"Mean improvement: {gdf['elasticity_improvement'].mean():.4f}")
+    print(f"\nCounties with positive improvement: {(gdf['elasticity_improvement'] > 0).sum()}")
+    print(f"Counties with negative improvement: {(gdf['elasticity_improvement'] < 0).sum()}")
+
+
+def compute_event_response_curves(recovery_all_events, units_df, capacity_df, output_dir="../analysis_output"):
+    """
+    Analyze county-level event response curves to classify recovery typologies.
+    
+    For each county, examines how recovery time responds to damage across all events
+    to classify into typologies based on response patterns.
+    
+    Parameters
+    ----------
+    recovery_all_events : DataFrame
+        Event-county recovery times with columns: event, fips, recovery_potential [months]
+    units_df : DataFrame
+        Event-county damage by DS with columns: event_name, fips, units_DS1-4_scaled
+    capacity_df : DataFrame
+        County capacity with columns: fips, construction_capacity
+    output_dir : str
+        Directory to save outputs
+        
+    Returns
+    -------
+    typology_df : DataFrame
+        County typologies with response curve characteristics
+    """
+    print("\n" + "="*80)
+    print("COMPUTING EVENT RESPONSE CURVES AND COUNTY TYPOLOGIES")
+    print("="*80)
+    
+    # Filter to counties with both metrics
+    plot_df = sensitivity_df[
+        sensitivity_df['recovery_elasticity'].notna() & 
+        sensitivity_df['saturation_factor_mean'].notna()
+    ].copy()
+    
+    # Cap saturation at 50 for visualization
+    plot_df['saturation_capped'] = plot_df['saturation_factor_mean'].clip(upper=50)
+    
+    # Calculate median values for quadrant division
+    elasticity_median = plot_df['recovery_elasticity'].median()
+    saturation_median = plot_df['saturation_capped'].median()
+    
+    print(f"\nMedian elasticity: {elasticity_median:.3f}")
+    print(f"Median saturation: {saturation_median:.3f}")
+    
+    # Identify quadrants
+    plot_df['quadrant'] = 'Other'
+    plot_df.loc[
+        (plot_df['recovery_elasticity'] >= elasticity_median) & 
+        (plot_df['saturation_capped'] >= saturation_median), 'quadrant'
+    ] = 'Q1: High-High'
+    plot_df.loc[
+        (plot_df['recovery_elasticity'] < elasticity_median) & 
+        (plot_df['saturation_capped'] >= saturation_median), 'quadrant'
+    ] = 'Q2: Low-High'
+    plot_df.loc[
+        (plot_df['recovery_elasticity'] < elasticity_median) & 
+        (plot_df['saturation_capped'] < saturation_median), 'quadrant'
+    ] = 'Q3: Low-Low'
+    plot_df.loc[
+        (plot_df['recovery_elasticity'] >= elasticity_median) & 
+        (plot_df['saturation_capped'] < saturation_median), 'quadrant'
+    ] = 'Q4: High-Low'
+    
+    # Select 3 example counties per quadrant (extreme values)
+    examples = []
+    
+    # Q1: Highest elasticity + saturation
+    q1 = plot_df[plot_df['quadrant'] == 'Q1: High-High'].copy()
+    q1['distance'] = (q1['recovery_elasticity'] - q1['recovery_elasticity'].max())**2 + \
+                     (q1['saturation_capped'] - q1['saturation_capped'].max())**2
+    examples.extend(q1.nsmallest(3, 'distance')['fips'].tolist())
+    
+    # Q2: Lowest elasticity + highest saturation
+    q2 = plot_df[plot_df['quadrant'] == 'Q2: Low-High'].copy()
+    q2['distance'] = (q2['recovery_elasticity'] - q2['recovery_elasticity'].min())**2 + \
+                     (q2['saturation_capped'] - q2['saturation_capped'].max())**2
+    examples.extend(q2.nsmallest(3, 'distance')['fips'].tolist())
+    
+    # Q3: Lowest elasticity + saturation
+    q3 = plot_df[plot_df['quadrant'] == 'Q3: Low-Low'].copy()
+    q3['distance'] = (q3['recovery_elasticity'] - q3['recovery_elasticity'].min())**2 + \
+                     (q3['saturation_capped'] - q3['saturation_capped'].min())**2
+    examples.extend(q3.nsmallest(3, 'distance')['fips'].tolist())
+    
+    # Q4: Highest elasticity + lowest saturation
+    q4 = plot_df[plot_df['quadrant'] == 'Q4: High-Low'].copy()
+    q4['distance'] = (q4['recovery_elasticity'] - q4['recovery_elasticity'].max())**2 + \
+                     (q4['saturation_capped'] - q4['saturation_capped'].min())**2
+    examples.extend(q4.nsmallest(3, 'distance')['fips'].tolist())
+    
+    plot_df['is_example'] = plot_df['fips'].isin(examples)
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(4, 4))
+    
+    # DS color mapping
+    ds_colors = {
+        1: '#d4e6f1',  # Light blue
+        2: '#f9e79f',  # Light yellow
+        3: '#f8b878',  # Orange
+        4: '#e74c3c'   # Red
+    }
+    
+    # Plot all counties
+    for ds in sorted(plot_df['dominant_ds'].dropna().unique()):
+        ds_data = plot_df[plot_df['dominant_ds'] == ds]
+        ax.scatter(
+            ds_data['recovery_elasticity'],
+            ds_data['saturation_capped'],
+            c=ds_colors.get(ds, 'gray'),
+            s=20,
+            alpha=0.6,
+            edgecolors='0.5',
+            linewidth=0.5,
+            label=f'DS{int(ds)}'
+        )
+    
+    # Highlight example counties
+    examples_df = plot_df[plot_df['is_example']]
+    ax.scatter(
+        examples_df['recovery_elasticity'],
+        examples_df['saturation_capped'],
+        s=80,
+        facecolors='none',
+        edgecolors='black',
+        linewidth=1.5,
+        zorder=10
+    )
+    
+    # Add labels for examples
+    for _, row in examples_df.iterrows():
+        ax.annotate(
+            row['fips'],
+            (row['recovery_elasticity'], row['saturation_capped']),
+            xytext=(5, 5),
+            textcoords='offset points',
+            fontsize=6,
+            alpha=0.8
+        )
+    
+    # Add median lines
+    ax.axhline(saturation_median, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
+    ax.axvline(elasticity_median, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
+    
+    # Add quadrant labels
+    ax.text(0.95, 0.95, 'High-High\n(Crisis)', transform=ax.transAxes,
+            ha='right', va='top', fontsize=7, alpha=0.6)
+    ax.text(0.05, 0.95, 'Low-High\n(Constrained)', transform=ax.transAxes,
+            ha='left', va='top', fontsize=7, alpha=0.6)
+    ax.text(0.05, 0.05, 'Low-Low\n(Manageable)', transform=ax.transAxes,
+            ha='left', va='bottom', fontsize=7, alpha=0.6)
+    ax.text(0.95, 0.05, 'High-Low\n(At Capacity)', transform=ax.transAxes,
+            ha='right', va='bottom', fontsize=7, alpha=0.6)
+    
+    ax.set_xlabel('Recovery Elasticity', fontsize=10)
+    ax.set_ylabel('Capacity Saturation Factor', fontsize=10)
+    ax.set_title('County Recovery Profiles', fontsize=11, pad=10)
+    ax.legend(loc='upper left', fontsize=7, frameon=False)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0.8, min(50, plot_df['saturation_capped'].quantile(0.98)))
+    
+    # Save
+    output_path = Path(output_dir) / "elasticity_saturation_scatterplot.png"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+    print(f"\nSaved scatterplot to: {output_path}")
+    
+    plt.close()
+    
+    # Print example counties
+    print("\n" + "="*80)
+    print("EXAMPLE COUNTIES BY QUADRANT")
+    print("="*80)
+    for quadrant in ['Q1: High-High', 'Q2: Low-High', 'Q3: Low-Low', 'Q4: High-Low']:
+        print(f"\n{quadrant}:")
+        quad_examples = plot_df[plot_df['is_example'] & (plot_df['quadrant'] == quadrant)]
+        for _, row in quad_examples.iterrows():
+            print(f"  {row['fips']}: Elasticity={row['recovery_elasticity']:.3f}, "
+                  f"Saturation={row['saturation_factor_mean']:.2f}, DS={int(row['dominant_ds'])}")
+
+
+# ============================================================================
 # SECTION 8: SINGLE-EVENT ANALYSIS
 # ============================================================================
 
@@ -3736,39 +4869,39 @@ def main():
     # ========================================================================
     # STEP 3: Correlation analysis
     # ========================================================================
-    print("\n### STEP 3: CORRELATION ANALYSIS ###")
-    corr_annual = compute_correlations_annual(driver_analysis)
-    corr_event = compute_correlations_per_event(per_event_analysis_median)
+    # print("\n### STEP 3: CORRELATION ANALYSIS ###")
+    # corr_annual = compute_correlations_annual(driver_analysis)
+    # corr_event = compute_correlations_per_event(per_event_analysis_median)
     
     # ========================================================================
     # STEP 4: Variance partitioning
     # ========================================================================
-    print("\n### STEP 4: VARIANCE PARTITIONING ###")
-    vp_annual, vp_event_median, vp_event_maximum = perform_variance_partitioning_analysis(
-        driver_analysis, per_event_analysis_median, per_event_analysis_maximum
-    )
+    # print("\n### STEP 4: VARIANCE PARTITIONING ###")
+    # vp_annual, vp_event_median, vp_event_maximum = perform_variance_partitioning_analysis(
+    #     driver_analysis, per_event_analysis_median, per_event_analysis_maximum
+    # )
     
     # ========================================================================
     # STEP 5: County-level variance decomposition
     # ========================================================================
-    print("\n### STEP 5: COUNTY-LEVEL VARIANCE DECOMPOSITION ###")
-    per_event_analysis_median, model_event_median = compute_county_variance_contributions_per_event(
-        per_event_analysis_median
-    )
-    per_event_analysis_maximum, model_event_maximum = compute_county_variance_contributions_per_event_maximum(
-        per_event_analysis_maximum
-    )
-    driver_analysis, model_annual = compute_county_variance_contributions_annual(
-        driver_analysis
-    )
+    # print("\n### STEP 5: COUNTY-LEVEL VARIANCE DECOMPOSITION ###")
+    # per_event_analysis_median, model_event_median = compute_county_variance_contributions_per_event(
+    #     per_event_analysis_median
+    # )
+    # per_event_analysis_maximum, model_event_maximum = compute_county_variance_contributions_per_event_maximum(
+    #     per_event_analysis_maximum
+    # )
+    # driver_analysis, model_annual = compute_county_variance_contributions_annual(
+    #     driver_analysis
+    # )
     
     # ========================================================================
     # STEP 6: Spatial pattern analysis
     # ========================================================================
-    print("\n### STEP 6: SPATIAL PATTERN ANALYSIS ###")
-    comparison_data, gdf_change = analyze_spatial_patterns(
-        driver_analysis, per_event_analysis_median, coastal_counties
-    )
+    # print("\n### STEP 6: SPATIAL PATTERN ANALYSIS ###")
+    # comparison_data, gdf_change = analyze_spatial_patterns(
+    #     driver_analysis, per_event_analysis_median, coastal_counties
+    # )
     
     # ========================================================================
     # STEP 7: Create visualizations
@@ -3780,59 +4913,72 @@ def main():
     output_dir.mkdir(exist_ok=True)
     
     # EAD damage state maps
-    create_ead_damage_state_maps(ead_wide, coastal_counties, str(output_dir))
+    # create_ead_damage_state_maps(ead_wide, coastal_counties, str(output_dir))
     
     # EARP and capacity maps
-    create_earp_capacity_maps(earp_df, capacity_df, coastal_counties, str(output_dir))
+    # create_earp_capacity_maps(earp_df, capacity_df, coastal_counties, str(output_dir))
     
     # Three-panel maps (EAD + Capacity + EARP)
-    create_three_panel_maps(ead_wide, capacity_df, earp_df, coastal_counties, str(output_dir))
+    # create_three_panel_maps(ead_wide, capacity_df, earp_df, coastal_counties, str(output_dir))
     
     # Three-panel maps - Per-Event (Median Damage + Capacity + Median Recovery)
-    create_three_panel_maps_per_event(per_event_analysis_median, capacity_df, coastal_counties, str(output_dir))
+    # create_three_panel_maps_per_event(per_event_analysis_median, capacity_df, coastal_counties, str(output_dir))
     
     # Three-panel maps - Per-Event (Median, with titles instead of labels)
-    create_three_panel_maps_per_event_median_titled(per_event_analysis_median, capacity_df, coastal_counties, str(output_dir))
+    # create_three_panel_maps_per_event_median_titled(per_event_analysis_median, capacity_df, coastal_counties, str(output_dir))
     
     # Three-panel maps - Per-Event (Maximum Damage + Capacity + Maximum Recovery)
-    create_three_panel_maps_per_event_maximum(per_event_analysis_maximum, capacity_df, coastal_counties, str(output_dir))
+    # create_three_panel_maps_per_event_maximum(per_event_analysis_maximum, capacity_df, coastal_counties, str(output_dir))
     
     # Driver scatterplots
-    create_driver_scatterplots(
-        driver_analysis, per_event_analysis_median, 
-        corr_annual, corr_event, str(output_dir)
-    )
+    # create_driver_scatterplots(
+    #     driver_analysis, per_event_analysis_median, 
+    #     corr_annual, corr_event, str(output_dir)
+    # )
     
     # Variance partitioning plots (using median for now - can be updated later)
-    create_variance_partitioning_plots(vp_annual, vp_event_median, str(output_dir))
+    # create_variance_partitioning_plots(vp_annual, vp_event_median, str(output_dir))
     
     # Variance share maps (2-panel: annual vs median)
-    create_variance_share_maps(
-        coastal_counties, driver_analysis, per_event_analysis_median,
-        model_annual, model_event_median, str(output_dir)
-    )
+    # create_variance_share_maps(
+    #     coastal_counties, driver_analysis, per_event_analysis_median,
+    #     model_annual, model_event_median, str(output_dir)
+    # )
     
     # Variance share maps (3-panel: annual, median, maximum)
-    create_variance_share_maps_three_panel(
-        coastal_counties, driver_analysis, per_event_analysis_median, per_event_analysis_maximum,
-        model_annual, model_event_median, model_event_maximum, str(output_dir)
-    )
+    # create_variance_share_maps_three_panel(
+    #     coastal_counties, driver_analysis, per_event_analysis_median, per_event_analysis_maximum,
+    #     model_annual, model_event_median, model_event_maximum, str(output_dir)
+    # )
     
     # Variance context indices (combines variance drivers with actual conditions)
-    create_variance_context_indices(
-        coastal_counties, driver_analysis, per_event_analysis_median,
-        capacity_df, ead_wide, earp_df, str(output_dir)
-    )
+    # create_variance_context_indices(
+    #     coastal_counties, driver_analysis, per_event_analysis_median,
+    #     capacity_df, ead_wide, earp_df, str(output_dir)
+    # )
     
     # Per-event bottleneck indices
-    per_event_bottleneck_df = create_per_event_bottleneck_indices(
-        coastal_counties, per_event_analysis_median, capacity_df, str(output_dir)
-    )
+    # per_event_bottleneck_df = create_per_event_bottleneck_indices(
+    #     coastal_counties, per_event_analysis_median, capacity_df, str(output_dir)
+    # )
     
     # Intervention priority maps
-    create_intervention_priority_maps(
-        driver_analysis, per_event_analysis_median, coastal_counties, str(output_dir)
+    # create_intervention_priority_maps(
+    #     driver_analysis, per_event_analysis_median, coastal_counties, str(output_dir)
+    # )
+    
+    # County sensitivity metrics (new event-level analysis)
+    sensitivity_df = compute_county_sensitivity_metrics(
+        recovery_all_events, units_df, capacity_df, str(output_dir)
     )
+    create_sensitivity_metrics_maps(
+        sensitivity_df, coastal_counties, str(output_dir)
+    )
+    
+    # Event response curves and typologies
+    # typology_df = compute_event_response_curves(
+    #     recovery_all_events, units_df, capacity_df, str(output_dir)
+    # )
     
     # Print final summary
     print("\n" + "="*80)
@@ -3840,46 +4986,51 @@ def main():
     print("="*80)
     print(f"\nResults saved to: {output_dir}")
     print(f"\nKey findings:")
-    print(f"  • {len(driver_analysis)} counties analyzed (annual)")
-    print(f"  • {len(per_event_analysis_median)} counties analyzed (per-event median)")
-    print(f"  • {len(per_event_analysis_maximum)} counties analyzed (per-event maximum)")
-    print(f"  • Annual R²: {model_annual['r2']:.3f}")
-    print(f"  • Per-event Median R²: {model_event_median['r2']:.3f}")
-    print(f"  • Per-event Maximum R²: {model_event_maximum['r2']:.3f}")
+    # print(f"  • {len(driver_analysis)} counties analyzed (annual)")
+    # print(f"  • {len(per_event_analysis_median)} counties analyzed (per-event median)")
+    # print(f"  • {len(per_event_analysis_maximum)} counties analyzed (per-event maximum)")
+    # print(f"  • Annual R²: {model_annual['r2']:.3f}")
+    # print(f"  • Per-event Median R²: {model_event_median['r2']:.3f}")
+    # print(f"  • Per-event Maximum R²: {model_event_maximum['r2']:.3f}")
+    print(f"  • County sensitivity metrics computed for {len(sensitivity_df)} counties")
     
     print(f"\nVisualizations generated:")
-    print(f"  1. na_coast_ead_by_damage_state.png")
-    print(f"  2. na_coast_earp_metrics.png")
-    print(f"  3. na_coast_3panel_ead_capacity_recovery_notitle.png (Annual)")
-    print(f"  4. na_coast_3panel_median_event_damage_capacity_recovery_notitle.png")
-    print(f"  5. na_coast_3panel_maximum_event_damage_capacity_recovery_notitle.png")
-    print(f"  6. median_recovery_drivers_scatter.png")
-    print(f"  7. variance_partitioning_annual_vs_event.png")
-    print(f"  8. variance_share_annual_vs_event_maps.png (2-panel: annual vs median)")
-    print(f"  9. variance_share_three_panel_maps.png (3-panel: annual/median/maximum)")
-    print(f"  10. variance_share_annual_vs_event.png (distribution)")
-    print(f"  11. variance_context_indices.png (Annual bottleneck analysis)")
-    print(f"  12. per_event_bottleneck_indices.png (Median event bottleneck analysis)")
-    print(f"  13. top_bottleneck_counties_map.png (Spatial distribution of top 10)")
-    print(f"  14. top_bottleneck_counties_profiles.png (Damage/capacity/recovery profiles)")
-    print(f"  15. sensitivity_analysis_maps.png (NEW: Sensitivity ratios & hybrid classification)")
+    # print(f"  1. na_coast_ead_by_damage_state.png")
+    # print(f"  2. na_coast_earp_metrics.png")
+    # print(f"  3. na_coast_3panel_ead_capacity_recovery_notitle.png (Annual)")
+    # print(f"  4. na_coast_3panel_median_event_damage_capacity_recovery_notitle.png")
+    # print(f"  5. na_coast_3panel_maximum_event_damage_capacity_recovery_notitle.png")
+    # print(f"  6. median_recovery_drivers_scatter.png")
+    # print(f"  7. variance_partitioning_annual_vs_event.png")
+    # print(f"  8. variance_share_annual_vs_event_maps.png (2-panel: annual vs median)")
+    # print(f"  9. variance_share_three_panel_maps.png (3-panel: annual/median/maximum)")
+    # print(f"  10. variance_share_annual_vs_event.png (distribution)")
+    # print(f"  11. variance_context_indices.png (Annual bottleneck analysis)")
+    # print(f"  12. per_event_bottleneck_indices.png (Median event bottleneck analysis)")
+    # print(f"  13. top_bottleneck_counties_map.png (Spatial distribution of top 10)")
+    # print(f"  14. top_bottleneck_counties_profiles.png (Damage/capacity/recovery profiles)")
+    # print(f"  15. intervention_priority_maps.png (Strategic intervention priorities)")
+    print(f"  1. county_sensitivity_metrics_maps.png (Per-county event-level analysis)")
+    print(f"      - Panel 1: Recovery elasticity to damage")
+    print(f"      - Panel 2: Capacity saturation factors (DS-weighted)")
+    print(f"      - Panel 3: Damage state profiles")
     
-    print(f"\nVariance Partitioning Summary:")
-    print(f"  Annual (EARP):")
-    print(f"    - Unique damage:   {vp_annual['unique_var1']*100:.1f}%")
-    print(f"    - Unique capacity: {vp_annual['unique_var2']*100:.1f}%")
-    print(f"    - Shared:          {vp_annual['shared']*100:.1f}%")
-    print(f"    - Unexplained:     {vp_annual['unexplained']*100:.1f}%")
-    print(f"  Per-Event Median:")
-    print(f"    - Unique damage:   {vp_event_median['unique_var1']*100:.1f}%")
-    print(f"    - Unique capacity: {vp_event_median['unique_var2']*100:.1f}%")
-    print(f"    - Shared:          {vp_event_median['shared']*100:.1f}%")
-    print(f"    - Unexplained:     {vp_event_median['unexplained']*100:.1f}%")
-    print(f"  Per-Event Maximum:")
-    print(f"    - Unique damage:   {vp_event_maximum['unique_var1']*100:.1f}%")
-    print(f"    - Unique capacity: {vp_event_maximum['unique_var2']*100:.1f}%")
-    print(f"    - Shared:          {vp_event_maximum['shared']*100:.1f}%")
-    print(f"    - Unexplained:     {vp_event_maximum['unexplained']*100:.1f}%")
+    # print(f"\nVariance Partitioning Summary:")
+    # print(f"  Annual (EARP):")
+    # print(f"    - Unique damage:   {vp_annual['unique_var1']*100:.1f}%")
+    # print(f"    - Unique capacity: {vp_annual['unique_var2']*100:.1f}%")
+    # print(f"    - Shared:          {vp_annual['shared']*100:.1f}%")
+    # print(f"    - Unexplained:     {vp_annual['unexplained']*100:.1f}%")
+    # print(f"  Per-Event Median:")
+    # print(f"    - Unique damage:   {vp_event_median['unique_var1']*100:.1f}%")
+    # print(f"    - Unique capacity: {vp_event_median['unique_var2']*100:.1f}%")
+    # print(f"    - Shared:          {vp_event_median['shared']*100:.1f}%")
+    # print(f"    - Unexplained:     {vp_event_median['unexplained']*100:.1f}%")
+    # print(f"  Per-Event Maximum:")
+    # print(f"    - Unique damage:   {vp_event_maximum['unique_var1']*100:.1f}%")
+    # print(f"    - Unique capacity: {vp_event_maximum['unique_var2']*100:.1f}%")
+    # print(f"    - Shared:          {vp_event_maximum['shared']*100:.1f}%")
+    # print(f"    - Unexplained:     {vp_event_maximum['unexplained']*100:.1f}%")
     
     return {
         'counties': counties,
@@ -3889,18 +5040,19 @@ def main():
         'driver_analysis': driver_analysis,
         'per_event_analysis_median': per_event_analysis_median,
         'per_event_analysis_maximum': per_event_analysis_maximum,
-        'corr_annual': corr_annual,
-        'corr_event': corr_event,
-        'vp_annual': vp_annual,
-        'vp_event_median': vp_event_median,
-        'vp_event_maximum': vp_event_maximum,
-        'model_annual': model_annual,
-        'model_event_median': model_event_median,
-        'model_event_maximum': model_event_maximum,
-        'comparison_data': comparison_data,
-        'gdf_change': gdf_change,
+        # 'corr_annual': corr_annual,
+        # 'corr_event': corr_event,
+        # 'vp_annual': vp_annual,
+        # 'vp_event_median': vp_event_median,
+        # 'vp_event_maximum': vp_event_maximum,
+        # 'model_annual': model_annual,
+        # 'model_event_median': model_event_median,
+        # 'model_event_maximum': model_event_maximum,
+        # 'comparison_data': comparison_data,
+        # 'gdf_change': gdf_change,
         'recovery_all_events': recovery_all_events,
-        'units_df': units_df
+        'units_df': units_df,
+        'sensitivity_df': sensitivity_df
     }
 
 
