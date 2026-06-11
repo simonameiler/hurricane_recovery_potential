@@ -1,0 +1,1046 @@
+"""
+Create all manuscript figures (excluding bivariate maps) for the hurricane
+recovery potential study.
+
+Figures produced
+----------------
+Main text
+  Figure 2  annual_3panel.png / .pdf           (EAUA, CC, EARP triptych)
+  Figure 3  recovery_drivers_annual_vs_median.png / .pdf  (2×2 scatterplot)
+
+Supplementary
+  Figure S1 na_coast_hazard_overview.png / .pdf  (wind/surge hazard overview)
+  Figure S2 event_350_3panel_map.png / .pdf
+            event_4347_3panel_map.png / .pdf     (single-event 3-panel)
+  Figure S5 median_event_3panel.png / .pdf
+  Figure S6 max_event_3panel.png / .pdf
+  Figure S7 recovery_drivers_annual_max.png / .pdf (2×2 scatter annual + max)
+  Figure S8 skewness_maps.png / .pdf
+
+All outputs are saved to analysis_output/figures/ as PNG (300 dpi) and PDF.
+
+Run with:
+  conda activate climada_env && python scripts/create_manuscript_figures.py
+
+To generate only specific figures:
+  python scripts/create_manuscript_figures.py --figures fig2 fig3 figS2
+"""
+
+import argparse
+import json
+import warnings
+from pathlib import Path
+
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib.colors import LogNorm, Normalize
+from matplotlib.ticker import LogLocator, NullLocator
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from scipy.stats import spearmanr
+
+warnings.filterwarnings("ignore")
+
+# ---------------------------------------------------------------------------
+# Print dimensions (IOPP: 8.5 cm single / 15 cm double column) + font settings
+# ---------------------------------------------------------------------------
+W_SINGLE = 3.35   # inches — 8.5 cm, single column
+W_DOUBLE = 5.91   # inches — 15.0 cm, double column
+
+plt.rcParams.update({
+    "font.family":     "sans-serif",
+    "font.sans-serif": ["Helvetica", "Arial", "DejaVu Sans"],
+})
+
+# ---------------------------------------------------------------------------
+# Configuration – visual style matching create_bivariate_maps.py
+# ---------------------------------------------------------------------------
+SCRIPT_DIR = Path(__file__).parent
+BASE_DIR = SCRIPT_DIR.parent
+DATA_DIR = BASE_DIR / "data"
+OUTPUT_DIR = BASE_DIR / "analysis_output"
+FIGURES_DIR = OUTPUT_DIR / "figures"
+
+DEFAULT_FREQ = 0.00067334  # events per year (Poisson rate)
+RECOVERY_WEIGHTS = {"DS1": 1.0, "DS2": 1.0, "DS3": 3.0, "DS4": 6.0}
+
+COASTAL_STATE_FIPS = [
+    "01", "09", "10", "12", "13", "22", "23", "24", "25", "28",
+    "33", "34", "36", "37", "42", "44", "45", "48", "51",
+]
+
+MAP_XLIM = (-107, -65)
+MAP_YLIM = (24, 48)
+
+NO_DATA_COLOR = "#bab9b9"
+COUNTY_EDGECOLOR = "#aaaaaa"
+COUNTY_LINEWIDTH = 0.1
+STATE_EDGECOLOR = "#444444"
+STATE_LINEWIDTH = 0.3
+
+
+# ---------------------------------------------------------------------------
+# Output helpers
+# ---------------------------------------------------------------------------
+
+def _save_fig(fig, stem: str):
+    """Save figure as PNG (300 dpi) and PDF to FIGURES_DIR."""
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    for ext in ("png", "pdf"):
+        fig.savefig(FIGURES_DIR / f"{stem}.{ext}", dpi=300, bbox_inches="tight")
+    print(f"  Saved  {stem}.png  +  .pdf  →  {FIGURES_DIR}")
+
+
+# ---------------------------------------------------------------------------
+# Shared plotting helpers
+# ---------------------------------------------------------------------------
+
+def _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label,
+                      norm=None, use_log=True, invert_cbar=False):
+    """
+    Draw a single choropleth panel on *ax* with a horizontal colorbar below.
+
+    Parameters
+    ----------
+    gdf        : GeoDataFrame containing column *col* and geometry
+    state_gdf  : GeoDataFrame used for state-border overlay
+    ax         : matplotlib Axes to draw on
+    col        : column name in *gdf* to plot
+    cmap       : colormap string or object
+    cbar_label : label for the colorbar
+    norm       : matplotlib Norm; auto-computed from data if None
+    use_log    : if True, use LogNorm (ignored when norm is supplied explicitly)
+    """
+    tmp = gdf[[col, "geometry"]].copy()
+    tmp.loc[~(tmp[col] > 0), col] = np.nan
+
+    valid = tmp[col].dropna()
+
+    if norm is None and use_log and len(valid) > 0:
+        vmin = valid.min()
+        vmax = valid.max()
+        if np.isfinite(vmin) and np.isfinite(vmax) and vmin > 0:
+            norm = LogNorm(vmin=vmin / 2, vmax=vmax)
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("bottom", size="4%", pad=0.3)
+
+    tmp.plot(
+        column=col, cmap=cmap, norm=norm,
+        edgecolor=COUNTY_EDGECOLOR, linewidth=COUNTY_LINEWIDTH,
+        legend=True, ax=ax, cax=cax,
+        legend_kwds={"orientation": "horizontal"},
+        missing_kwds={
+            "color": NO_DATA_COLOR,
+            "edgecolor": COUNTY_EDGECOLOR,
+            "linewidth": COUNTY_LINEWIDTH,
+        },
+    )
+
+    # State borders overlay
+    state_gdf.plot(ax=ax, facecolor="none",
+                   edgecolor=STATE_EDGECOLOR, linewidth=STATE_LINEWIDTH)
+
+    ax.set_xlim(MAP_XLIM)
+    ax.set_ylim(MAP_YLIM)
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+    # Colorbar styling
+    if invert_cbar:
+        cax.set_xticks([])
+        cax.set_xlabel("High     Recovery potential     Low", fontsize=9, labelpad=3)
+    else:
+        cax.set_xlabel(cbar_label, fontsize=9, labelpad=2)
+        cax.tick_params(labelsize=8)
+        cax.tick_params(which="minor", length=0)
+    for spine in cax.spines.values():
+        spine.set_edgecolor("black")
+        spine.set_linewidth(0.5)
+
+
+def _scatter_panel(ax, x, y, xlabel, ylabel, panel_label=None,
+                   alpha=0.35, s=12, color="#2166ac"):
+    """
+    Draw a log-log scatter plot with Spearman ρ annotation.
+
+    Parameters
+    ----------
+    ax           : matplotlib Axes
+    x, y         : pandas Series (may contain NaN; zero values excluded)
+    xlabel/ylabel: axis labels
+    panel_label  : bold letter label in top-left corner
+    """
+    valid = (~x.isna()) & (~y.isna()) & (x > 0) & (y > 0)
+    xv, yv = x[valid].values, y[valid].values
+
+    ax.scatter(xv, yv, alpha=alpha, s=s, color=color, linewidths=0)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel(xlabel, fontsize=9)
+    ax.set_ylabel(ylabel, fontsize=9)
+    ax.tick_params(labelsize=8)
+
+    for spine in ax.spines.values():
+        spine.set_edgecolor("0.4")
+        spine.set_linewidth(0.8)
+
+    if len(xv) >= 3:
+        r, _ = spearmanr(xv, yv)
+        n = len(xv)
+        ax.text(
+            0.04, 0.96,
+            f"ρ = {r:+.2f}\nn = {n:,}",
+            transform=ax.transAxes, fontsize=8,
+            va="top", ha="left",
+            bbox=dict(boxstyle="round,pad=0.25", fc="white",
+                      ec="0.7", alpha=0.85),
+        )
+
+    if panel_label is not None:
+        ax.text(0.02, 0.98, f"({panel_label})", transform=ax.transAxes,
+                fontsize=10, fontweight="bold", va="top", ha="left")
+
+
+def _color_scatter_panel(ax, x, y, c, xlabel, ylabel, clabel,
+                          cmap, panel_label=None,
+                          alpha=0.6, s=20, show_yticks=True):
+    """
+    Color-encoded log-log scatter with vertical colorbar and inverted y-axis.
+
+    The y-axis is inverted so short recovery time (high RP) appears at the top.
+    Correlation is Spearman ρ on log-transformed values.
+
+    Parameters
+    ----------
+    ax           : matplotlib Axes
+    x, y, c      : pandas Series – NaN and non-positive values are excluded
+    xlabel/ylabel: axis labels
+    clabel       : colorbar label
+    cmap         : colormap string for the color variable
+    panel_label  : letter rendered as "(a)" etc. in top-left corner
+    show_yticks  : False on right panels to reduce clutter
+    """
+    valid = (
+        (~x.isna()) & (~y.isna()) & (~c.isna())
+        & (x > 0) & (y > 0) & (c > 0)
+    )
+    xv, yv, cv = x[valid].values, y[valid].values, c[valid].values
+
+    sc = ax.scatter(
+        xv, yv, c=cv, cmap=cmap, alpha=alpha, s=s,
+        norm=LogNorm(vmin=cv.min(), vmax=cv.max()),
+        linewidths=0,
+    )
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.invert_yaxis()
+    ax.set_xlabel(xlabel, fontsize=9)
+    if show_yticks:
+        ax.set_ylabel(ylabel, fontsize=9)
+    ax.grid(False)
+
+    for spine in ax.spines.values():
+        spine.set_edgecolor("0.4")
+        spine.set_linewidth(0.8)
+    ax.tick_params(color="0.4", labelcolor="0.2")
+
+    ax.xaxis.set_major_locator(LogLocator(base=10))
+    ax.tick_params(axis="x", which="major", bottom=True, top=False,
+                   labelbottom=True, labelsize=8)
+    ax.tick_params(axis="x", which="minor", bottom=False)
+    ax.tick_params(axis="y", which="both",
+                   left=show_yticks, right=False,
+                   labelleft=show_yticks, labelsize=8)
+
+    # Side colorbar
+    cbar = plt.colorbar(sc, ax=ax)
+    cbar.set_label(clabel, fontsize=8)
+    cbar.ax.tick_params(which="both", labelsize=8)
+    cbar.ax.tick_params(which="minor", length=0)
+    for spine in cbar.ax.spines.values():
+        spine.set_edgecolor("black")
+        spine.set_linewidth(0.5)
+
+    # Spearman ρ annotation
+    if len(xv) >= 3:
+        r, _ = spearmanr(xv, yv)
+        corr_x = 0.05 if show_yticks else 0.35
+        ax.text(
+            corr_x, 0.02,
+            f"\u03c1 = {r:+.3f}\nn = {len(xv):,}",
+            transform=ax.transAxes, fontsize=9, va="bottom",
+        )
+
+    if panel_label is not None:
+        ax.text(0.02, 0.98, f"({panel_label})", transform=ax.transAxes,
+                fontsize=10, fontweight="bold", va="top", ha="left")
+
+    return cbar
+
+
+# ---------------------------------------------------------------------------
+# Data loading
+# ---------------------------------------------------------------------------
+
+def load_spatial_data():
+    """Load coastal county shapefile and derive state-boundary overlay."""
+    print("  Loading county shapefile …")
+    counties = gpd.read_file(DATA_DIR / "US_counties.shp")
+    coastal = counties[counties["STATEFP"].isin(COASTAL_STATE_FIPS)].copy()
+    coastal["GEOID"] = (coastal["STATEFP"] + coastal["COUNTYFP"]).str.zfill(5)
+    state_gdf = coastal.dissolve(by="STATEFP").reset_index()
+    print(f"    {len(coastal)} coastal counties, {len(state_gdf)} states")
+    return coastal, state_gdf
+
+
+def load_annual_metrics():
+    """
+    Load EAUA, EARP, and CC (all as fips-keyed DataFrames).
+
+    Returns
+    -------
+    eaua_df : DataFrame with columns [fips, eaua]
+    earp_df : DataFrame with columns [fips, earp]
+    cc_df   : DataFrame with columns [fips, cc]
+    """
+    print("  Loading annual metrics …")
+
+    # Expected Annual Units Affected (EAUA)
+    dmg = pd.read_csv(OUTPUT_DIR / "county_event_frequency_damage_metrics.csv")
+    dmg["fips"] = dmg["fips"].astype(str).str.zfill(5)
+    dmg["eaua"] = dmg["total_weighted_damage_units"] * DEFAULT_FREQ
+    eaua_df = dmg[["fips", "eaua"]].copy()
+
+    # Expected Annual Recovery Potential (EARP; months/yr)
+    earp_raw = pd.read_csv(OUTPUT_DIR / "earp_per_county.csv")
+    earp_raw["fips"] = earp_raw["fips"].astype(str).str.zfill(5)
+    earp_df = earp_raw[["fips", "earp_months_per_year"]].rename(
+        columns={"earp_months_per_year": "earp"}
+    )
+
+    # Construction Capacity (CC; permits/month)
+    permits = pd.read_csv(DATA_DIR / "selected_states_counties_with_permits.csv")
+    permits["fips"] = permits["FIPS"].astype(str).str.zfill(5)
+    permits["cc"] = permits["Average_Building_Permits(12 months)"] / 12
+    cc_df = permits[["fips", "cc"]].copy()
+
+    print(f"    EAUA: {len(eaua_df)} counties")
+    print(f"    EARP: {len(earp_df)} counties")
+    print(f"    CC:   {len(cc_df)} counties")
+    return eaua_df, earp_df, cc_df
+
+
+def load_event_level_metrics():
+    """
+    Load per-county median and max event metrics.
+
+    Uses the pre-computed CSV if available, otherwise raises an error
+    (the CSV is produced by compare_median_vs_max_events.py).
+
+    Returns
+    -------
+    DataFrame with columns: fips, median_weighted_damage, median_recovery_months,
+                            max_weighted_damage, max_recovery_months
+    """
+    print("  Loading per-event metrics …")
+    csv_path = OUTPUT_DIR / "median_vs_max_event_comparison.csv"
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"{csv_path} not found. "
+            "Run scripts/compare_median_vs_max_events.py first."
+        )
+    df = pd.read_csv(csv_path)
+    df["fips"] = df["fips"].astype(str).str.zfill(5)
+    print(f"    Median/max metrics: {len(df)} counties")
+    return df
+
+
+def load_distribution_metrics():
+    """Load county-level distribution metrics (skewness etc.)."""
+    print("  Loading distribution metrics …")
+    df = pd.read_csv(OUTPUT_DIR / "county_distribution_metrics.csv")
+    df["fips"] = df["fips"].astype(str).str.zfill(5)
+    print(f"    Distribution metrics: {len(df)} counties")
+    return df
+
+
+def load_hazard_data():
+    """
+    Load wind and surge hazard matrices and compute per-county statistics.
+
+    The wind matrix is (n_events × n_counties) = (5018 × 3220).
+    County ordering follows county_region.csv (county_index column).
+
+    Returns None if scipy is not available (S1 is then skipped).
+    """
+    print("  Loading hazard matrices …")
+    try:
+        from scipy.io import loadmat
+    except ImportError:
+        print("    scipy not found – skipping hazard data (Figure S1 unavailable)")
+        return None
+
+    county_map = pd.read_csv(DATA_DIR / "county_region.csv")
+    county_map["fips"] = county_map["fips"].astype(str).str.zfill(5)
+    n_map = len(county_map)
+
+    wind_mat = loadmat(
+        DATA_DIR / "hazard" / "maxwindmat_ncep_reanal.mat"
+    )["maxwindmat"]  # (5018, 3220) events × counties
+
+    surge_raw = loadmat(
+        DATA_DIR / "hazard" / "maxelev_coastcounty_ncep_reanal.mat"
+    )
+    surge_key = "scounty_mhhw" if "scounty_mhhw" in surge_raw else "scounty"
+    surge_mat = surge_raw[surge_key]  # may be (3220, 5018) or (5018, 3220)
+    if surge_mat.shape[0] != wind_mat.shape[0]:
+        surge_mat = surge_mat.T  # ensure (events, counties)
+
+    rain_mat = loadmat(
+        DATA_DIR / "hazard" / "ptot_rain_county_ncep_reanal.mat"
+    )["ptot_mat"]  # (3220, 5018) counties × events
+    # Ensure counties are on axis-0
+    if rain_mat.shape[0] != wind_mat.shape[1]:
+        rain_mat = rain_mat.T
+    max_rain = rain_mat.max(axis=1)[:n_map]  # max across events per county
+
+    max_wind = wind_mat.max(axis=0)[:n_map]
+    mean_wind = wind_mat.mean(axis=0)[:n_map]
+    max_surge = surge_mat.max(axis=0)[:n_map]
+    pct_ts_wind = (wind_mat > 17.5).mean(axis=0)[:n_map] * 100
+
+    hazard_df = county_map[["fips"]].copy()
+    hazard_df["max_wind_ms"] = max_wind
+    hazard_df["mean_wind_ms"] = mean_wind
+    hazard_df["max_rain_mm"] = max_rain
+    hazard_df["max_surge_m"] = max_surge
+    hazard_df["pct_events_ts_wind"] = pct_ts_wind
+
+    print(f"    Hazard data: {len(hazard_df)} counties")
+    print(f"    Wind range:  {max_wind.min():.1f}–{max_wind.max():.1f} m/s")
+    print(f"    Rain range:  {max_rain.min():.0f}–{max_rain.max():.0f} mm")
+    print(f"    Surge range: {max_surge.min():.2f}–{max_surge.max():.2f} m")
+    return hazard_df
+
+
+def load_single_event(event_id):
+    """
+    Load damage and recovery data for a specific event.
+
+    Returns
+    -------
+    DataFrame with columns: fips, weighted_damage, cc, recovery_months
+    """
+    event_id = str(event_id)
+    print(f"  Loading event {event_id} …")
+
+    impact_file = (
+        BASE_DIR / "impacts_out" / "by_event" / "scaled"
+        / f"{event_id}_scaled.csv"
+    )
+    if not impact_file.exists():
+        raise FileNotFoundError(f"Impact file not found: {impact_file}")
+
+    impact_df = pd.read_csv(impact_file)
+    impact_df["fips"] = impact_df["fips"].astype(str).str.zfill(5)
+    impact_df["weighted_damage"] = (
+        impact_df["units_DS1_scaled"] * RECOVERY_WEIGHTS["DS1"]
+        + impact_df["units_DS2_scaled"] * RECOVERY_WEIGHTS["DS2"]
+        + impact_df["units_DS3_scaled"] * RECOVERY_WEIGHTS["DS3"]
+        + impact_df["units_DS4_scaled"] * RECOVERY_WEIGHTS["DS4"]
+    )
+
+    rec_file = (
+        DATA_DIR / "recovery_potential_per_scenario"
+        / f"{event_id}_scaled_recovery_potential.json"
+    )
+    if not rec_file.exists():
+        raise FileNotFoundError(f"Recovery file not found: {rec_file}")
+
+    with open(rec_file) as fh:
+        rec_data = json.load(fh)
+
+    rec_rows = []
+    for r in rec_data:
+        val = r.get("recovery_potential [months]", np.nan)
+        rec_rows.append({
+            "fips": str(r["fips"]).zfill(5),
+            "cc": float(r.get("reconstruction_capacity", np.nan)),
+            "recovery_months": np.nan if not np.isfinite(float(val)) else float(val),
+        })
+    rec_df = pd.DataFrame(rec_rows)
+
+    merged = impact_df[["fips", "weighted_damage"]].merge(
+        rec_df, on="fips", how="outer"
+    )
+    n_aff = int((merged["weighted_damage"] > 0).sum())
+    print(f"    {n_aff} counties with positive damage")
+    return merged
+
+
+# ---------------------------------------------------------------------------
+# Main GeoDataFrame builder
+# ---------------------------------------------------------------------------
+
+def build_main_gdf(coastal_counties, eaua_df, earp_df, cc_df,
+                   event_df, dist_df):
+    """
+    Merge all tabular metrics into the coastal county GeoDataFrame.
+
+    Returns a GeoDataFrame with columns (in addition to shapefile attributes):
+    eaua, earp, cc, median_weighted_damage, median_recovery_months,
+    max_weighted_damage, max_recovery_months, wd_skew, rt_skew
+    """
+    # Combine tabular metrics
+    metrics = (
+        eaua_df
+        .merge(earp_df, on="fips", how="outer")
+        .merge(cc_df,   on="fips", how="outer")
+    )
+
+    event_cols = [
+        "fips", "median_weighted_damage", "median_recovery_months",
+        "max_weighted_damage", "max_recovery_months",
+    ]
+    metrics = metrics.merge(
+        event_df[[c for c in event_cols if c in event_df.columns]],
+        on="fips", how="outer",
+    )
+
+    dist_cols = ["fips", "wd_skew", "rt_skew"]
+    metrics = metrics.merge(
+        dist_df[[c for c in dist_cols if c in dist_df.columns]],
+        on="fips", how="outer",
+    )
+
+    # Zero / negative → NaN for strictly positive metrics
+    for col in ("eaua", "earp", "cc",
+                "median_weighted_damage", "median_recovery_months",
+                "max_weighted_damage", "max_recovery_months"):
+        if col in metrics.columns:
+            metrics.loc[~(metrics[col] > 0), col] = np.nan
+
+    gdf = coastal_counties.merge(
+        metrics, left_on="GEOID", right_on="fips", how="left"
+    )
+    return gdf
+
+
+def _print_metric_summary(gdf, col, label):
+    valid = gdf[col].dropna()
+    valid = valid[valid > 0] if col not in ("wd_skew", "rt_skew") else valid.dropna()
+    if len(valid) > 0:
+        print(f"    {label:45s}  n={len(valid):4d}  "
+              f"min={valid.min():.4g}  median={valid.median():.4g}  "
+              f"max={valid.max():.4g}")
+
+
+# ---------------------------------------------------------------------------
+# Figure 2 – Annual triptych map
+# ---------------------------------------------------------------------------
+
+def fig2_annual_triptych(gdf, state_gdf):
+    """
+    Figure 2: Three-panel choropleth showing EAUA, Construction Capacity,
+    and EARP across the US Atlantic coast.
+    """
+    print("\nFigure 2: Annual triptych …")
+
+    fig, axes = plt.subplots(1, 3, figsize=(W_DOUBLE, 3.3))
+
+    panels = [
+        ("eaua", "cividis",  "EAUA [weighted units / yr]",              False),
+        ("cc",   "Greens",   "Construction capacity [permits / month]",  False),
+        ("earp", "Purples_r",  "Recovery potential",                       True),
+    ]
+    labels = ["a", "b", "c"]
+
+    for ax, (col, cmap, cbar_label, inv), lbl in zip(axes, panels, labels):
+        _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label, invert_cbar=inv)
+        ax.text(0.02, 0.98, f"({lbl})", transform=ax.transAxes,
+                fontsize=10, fontweight="bold", va="top", ha="left")
+
+    print("  Summary:")
+    for col, _, label, *__ in panels:
+        _print_metric_summary(gdf, col, label)
+
+    plt.tight_layout(pad=0.5)
+    _save_fig(fig, "annual_3panel")
+    plt.close()
+
+
+# ---------------------------------------------------------------------------
+# Figure 3 – 2×2 scatterplot: annual vs. median-event drivers
+# ---------------------------------------------------------------------------
+
+def fig3_recovery_drivers_scatter(gdf):
+    """
+    Figure 3: 2×2 color-encoded log-log scatter.
+    Row 0 (Annual):       EARP vs EAUA / CC,   colored by CC / EAUA
+    Row 1 (Median event): MRP  vs WUA  / CC,   colored by CC / WUA
+    Y-axis inverted: short recovery time (high potential) at top.
+    """
+    print("\nFigure 3: Recovery drivers scatter (annual + median event) …")
+
+    fig, axes = plt.subplots(2, 2, figsize=(W_DOUBLE, 5.8))
+
+    # Row 0 – annual
+    _color_scatter_panel(
+        axes[0, 0], gdf["eaua"], gdf["earp"], gdf["cc"],
+        xlabel="AU (weighted)",
+        ylabel="RP (low\u2013high)",
+        clabel="CC (permits/month)",
+        cmap="viridis",
+        panel_label="a",
+        show_yticks=True,
+    )
+    _color_scatter_panel(
+        axes[0, 1], gdf["cc"], gdf["earp"], gdf["eaua"],
+        xlabel="CC (permits/month)",
+        ylabel="RP (low\u2013high)",
+        clabel="AU (weighted)",
+        cmap="plasma",
+        panel_label="b",
+        show_yticks=False,
+    )
+
+    # Row 1 – median event
+    _color_scatter_panel(
+        axes[1, 0], gdf["median_weighted_damage"], gdf["median_recovery_months"],
+        gdf["cc"],
+        xlabel="AU (weighted)",
+        ylabel="RP (low\u2013high)",
+        clabel="CC (permits/month)",
+        cmap="viridis",
+        panel_label="c",
+        show_yticks=True,
+    )
+    _color_scatter_panel(
+        axes[1, 1], gdf["cc"], gdf["median_recovery_months"],
+        gdf["median_weighted_damage"],
+        xlabel="CC (permits/month)",
+        ylabel="RP (low\u2013high)",
+        clabel="AU (weighted)",
+        cmap="plasma",
+        panel_label="d",
+        show_yticks=False,
+    )
+
+    # Row labels
+    fig.text(0.02, 0.75, "annual", rotation=90, va="center", ha="center",
+             fontsize=9, fontweight="bold")
+    fig.text(0.02, 0.27, "median event", rotation=90, va="center", ha="center",
+             fontsize=9, fontweight="bold")
+
+    # Legend (no box)
+    fig.text(
+        0.98, 0.50,
+        "RP = recovery potential\nAU = affected units\nCC = construction capacity",
+        va="center", ha="left", fontsize=8,
+    )
+
+    plt.tight_layout(rect=[0.05, 0, 0.90, 1])
+    _save_fig(fig, "recovery_drivers_annual_vs_median")
+    plt.close()
+
+
+# ---------------------------------------------------------------------------
+# Figure S1 – Hazard overview map
+# ---------------------------------------------------------------------------
+
+def figS1_hazard_overview(coastal_counties, state_gdf, hazard_df):
+    """
+    Figure S1: Three-panel choropleth – maximum wind speed, maximum rainfall,
+    and maximum surge height per county across all synthetic events.
+    """
+    print("\nFigure S1: Hazard overview …")
+
+    if hazard_df is None:
+        print("  Skipped (hazard data not available – run with climada_env)")
+        return
+
+    gdf = coastal_counties.merge(
+        hazard_df, left_on="GEOID", right_on="fips", how="left"
+    )
+
+    fig, axes = plt.subplots(1, 3, figsize=(W_DOUBLE, 3.3))
+
+    panels = [
+        ("max_wind_ms",  "YlOrRd",  "Max wind speed [m/s]",       False),
+        ("max_rain_mm",  "Blues",   "Max rainfall [mm]",           False),
+        ("max_surge_m",  "viridis", "Max storm surge [m MHHW]",   False),
+    ]
+    labels = ["a", "b", "c"]
+
+    for ax, (col, cmap, cbar_label, inv), lbl in zip(axes, panels, labels):
+        _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label,
+                          invert_cbar=inv, use_log=False)
+        ax.text(0.02, 0.98, f"({lbl})", transform=ax.transAxes,
+                fontsize=10, fontweight="bold", va="top", ha="left")
+
+    print("  Summary:")
+    for col, _, label, *__ in panels:
+        _print_metric_summary(gdf, col, label)
+
+    plt.tight_layout(pad=0.5)
+    _save_fig(fig, "na_coast_hazard_overview")
+    plt.close()
+
+
+# ---------------------------------------------------------------------------
+# Figure S2 – Single-event 3-panel maps
+# ---------------------------------------------------------------------------
+
+def figS2_single_event_map(coastal_counties, state_gdf, event_id):
+    """
+    Figure S2: Three-panel choropleth for a single synthetic event:
+    (a) Weighted damage units, (b) Construction capacity, (c) Recovery time.
+    """
+    print(f"\nFigure S2: Event {event_id} map …")
+
+    event_df = load_single_event(event_id)
+
+    gdf = coastal_counties.merge(
+        event_df, left_on="GEOID", right_on="fips", how="left"
+    )
+    for col in ("weighted_damage", "cc", "recovery_months"):
+        gdf.loc[~(gdf[col] > 0), col] = np.nan
+
+    fig, axes = plt.subplots(1, 3, figsize=(W_DOUBLE, 3.3))
+
+    panels = [
+        ("weighted_damage", "cividis", "Weighted damage [units]",                False),
+        ("cc",              "Greens",  "Construction capacity [permits / month]", False),
+        ("recovery_months", "Purples_r", "Recovery potential",                      True),
+    ]
+    labels = ["a", "b", "c"]
+
+    n_affected = int((gdf["weighted_damage"] > 0).sum())
+
+    for ax, (col, cmap, cbar_label, inv), lbl in zip(axes, panels, labels):
+        _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label, invert_cbar=inv)
+        ax.text(0.02, 0.98, f"({lbl})", transform=ax.transAxes,
+                fontsize=10, fontweight="bold", va="top", ha="left")
+
+    print(f"  Affected counties: {n_affected}")
+    print("  Summary:")
+    for col, _, label, *__ in panels:
+        _print_metric_summary(gdf, col, label)
+
+    plt.tight_layout(pad=0.5)
+    _save_fig(fig, f"event_{event_id}_3panel_map")
+    plt.close()
+
+
+# ---------------------------------------------------------------------------
+# Figure S5 – Median event triptych
+# ---------------------------------------------------------------------------
+
+def figS5_median_event_triptych(gdf, state_gdf):
+    """
+    Figure S5: Three-panel choropleth – median per-event WUA, CC, MRP.
+    """
+    print("\nFigure S5: Median event triptych …")
+
+    fig, axes = plt.subplots(1, 3, figsize=(W_DOUBLE, 3.3))
+
+    panels = [
+        ("median_weighted_damage", "cividis", "Median WUA [weighted units]",              False),
+        ("cc",                     "Greens",  "Construction capacity [permits / month]",  False),
+        ("median_recovery_months", "Purples_r", "Recovery potential",                       True),
+    ]
+    labels = ["a", "b", "c"]
+
+    for ax, (col, cmap, cbar_label, inv), lbl in zip(axes, panels, labels):
+        _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label, invert_cbar=inv)
+        ax.text(0.02, 0.98, f"({lbl})", transform=ax.transAxes,
+                fontsize=10, fontweight="bold", va="top", ha="left")
+
+    print("  Summary:")
+    for col, _, label, *__ in panels:
+        _print_metric_summary(gdf, col, label)
+
+    plt.tight_layout(pad=0.5)
+    _save_fig(fig, "median_event_3panel")
+    plt.close()
+
+
+# ---------------------------------------------------------------------------
+# Figure S6 – Max event triptych
+# ---------------------------------------------------------------------------
+
+def figS6_max_event_triptych(gdf, state_gdf):
+    """
+    Figure S6: Three-panel choropleth – max per-event WUA, CC, max RP.
+    """
+    print("\nFigure S6: Max event triptych …")
+
+    fig, axes = plt.subplots(1, 3, figsize=(W_DOUBLE, 3.3))
+
+    panels = [
+        ("max_weighted_damage",  "cividis", "Max WUA [weighted units]",                False),
+        ("cc",                   "Greens",  "Construction capacity [permits / month]",  False),
+        ("max_recovery_months",  "Purples_r", "Recovery potential",                       True),
+    ]
+    labels = ["a", "b", "c"]
+
+    for ax, (col, cmap, cbar_label, inv), lbl in zip(axes, panels, labels):
+        _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label, invert_cbar=inv)
+        ax.text(0.02, 0.98, f"({lbl})", transform=ax.transAxes,
+                fontsize=10, fontweight="bold", va="top", ha="left")
+
+    print("  Summary:")
+    for col, _, label, *__ in panels:
+        _print_metric_summary(gdf, col, label)
+
+    plt.tight_layout(pad=0.5)
+    _save_fig(fig, "max_event_3panel")
+    plt.close()
+
+
+# ---------------------------------------------------------------------------
+# Figure S7 – Annual + Max event scatterplot (2×2)
+# ---------------------------------------------------------------------------
+
+def figS7_annual_max_scatter(gdf):
+    """
+    Figure S7: Max-event recovery drivers – 1×2 color-encoded log-log scatter.
+    (a) Max RP vs max WUA, colored by CC  (Greens)
+    (b) Max RP vs CC,      colored by max WUA (cividis)
+    Y-axis inverted: short recovery time (high potential) at top.
+    """
+    print("\nFigure S7: Max-event recovery drivers scatter …")
+
+    fig, axes = plt.subplots(1, 2, figsize=(W_DOUBLE, 3.2))
+
+    _color_scatter_panel(
+        axes[0], gdf["max_weighted_damage"], gdf["max_recovery_months"], gdf["cc"],
+        xlabel="AU (weighted)",
+        ylabel="RP (low\u2013high)",
+        clabel="CC (permits/month)",
+        cmap="viridis",
+        panel_label="a",
+        show_yticks=True,
+    )
+    _color_scatter_panel(
+        axes[1], gdf["cc"], gdf["max_recovery_months"], gdf["max_weighted_damage"],
+        xlabel="CC (permits/month)",
+        ylabel="RP (low\u2013high)",
+        clabel="AU (weighted)",
+        cmap="plasma",
+        panel_label="b",
+        show_yticks=False,
+    )
+
+    fig.text(0.02, 0.55, "maximum value", rotation=90, va="center", ha="center",
+             fontsize=9, fontweight="bold")
+    fig.text(
+        0.98, 0.50,
+        "RP = recovery potential\nAU = affected units\nCC = construction capacity",
+        va="center", ha="left", fontsize=8,
+    )
+
+    plt.tight_layout(rect=[0.05, 0, 0.93, 1])
+    _save_fig(fig, "recovery_drivers_annual_max")
+    plt.close()
+
+
+# ---------------------------------------------------------------------------
+# Figure S8 – Skewness maps
+# ---------------------------------------------------------------------------
+
+def _skewness_single_panel(gdf, state_gdf, col, cbar_label, stem):
+    """
+    Draw and save a single skewness choropleth with a right-side colorbar.
+    """
+    tmp = gdf[[col, "geometry"]].copy()
+    valid = tmp[col].dropna()
+
+    if len(valid) == 0:
+        print(f"  No valid data for {col!r} – skipping")
+        return
+
+    vmax = float(np.percentile(valid.clip(lower=0), 95))
+    norm = Normalize(vmin=0, vmax=max(vmax, 1e-6))
+
+    fig, ax = plt.subplots(1, 1, figsize=(W_DOUBLE * 0.65, 3.3))
+
+    # No-data counties
+    tmp[tmp[col].isna()].plot(
+        ax=ax, color=NO_DATA_COLOR,
+        edgecolor=COUNTY_EDGECOLOR, linewidth=COUNTY_LINEWIDTH,
+    )
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="4%", pad=0.1)
+
+    tmp[tmp[col].notna()].plot(
+        column=col, cmap="YlOrRd", norm=norm,
+        edgecolor=COUNTY_EDGECOLOR, linewidth=COUNTY_LINEWIDTH,
+        legend=True, ax=ax, cax=cax,
+        legend_kwds={"orientation": "vertical"},
+    )
+
+    state_gdf.plot(ax=ax, facecolor="none",
+                   edgecolor=STATE_EDGECOLOR, linewidth=STATE_LINEWIDTH)
+
+    ax.set_xlim(MAP_XLIM)
+    ax.set_ylim(MAP_YLIM)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.text(0.02, 0.98, "(a)", transform=ax.transAxes,
+            fontsize=10, fontweight="bold", va="top", ha="left")
+
+    cax.set_ylabel(cbar_label, fontsize=9, labelpad=3)
+    cax.tick_params(labelsize=8)
+    cax.tick_params(which="minor", length=0)
+    for spine in cax.spines.values():
+        spine.set_edgecolor("black")
+        spine.set_linewidth(0.5)
+
+    plt.tight_layout(pad=0.3)
+    _save_fig(fig, stem)
+    plt.close()
+
+    v = gdf[col].dropna()
+    print(f"    {cbar_label:55s}  n={len(v):4d}  "
+          f"median={v.median():.2f}  p95={np.percentile(v, 95):.2f}  "
+          f"max={v.max():.2f}")
+
+
+def figS8_skewness_maps(gdf, state_gdf):
+    """
+    Figure S8: Two single-panel choropleths saved separately.
+      skewness_wd.png / .pdf  – skewness of per-event damage
+      skewness_rt.png / .pdf  – skewness of per-event recovery time
+    """
+    print("\nFigure S8: Skewness maps …")
+
+    for col in ("wd_skew", "rt_skew"):
+        if col not in gdf.columns:
+            print(f"  Column {col!r} missing – skipping Figure S8")
+            return
+
+    print("  Summary:")
+    _skewness_single_panel(
+        gdf, state_gdf,
+        col="wd_skew",
+        cbar_label="Skewness",
+        stem="skewness_wd",
+    )
+    _skewness_single_panel(
+        gdf, state_gdf,
+        col="rt_skew",
+        cbar_label="Skewness",
+        stem="skewness_rt",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+ALL_FIGS = {
+    "fig2":  "Figure 2  – Annual triptych map (EAUA, CC, EARP)",
+    "fig3":  "Figure 3  – Annual recovery drivers scatter (1×2, color-coded)",
+    "figS1": "Figure S1 – Hazard overview map (max wind, max surge)",
+    "figS2": "Figure S2 – Single-event 3-panel maps (events 350 & 4347)",
+    "figS5": "Figure S5 – Median event triptych (MUA, CC, MRP)",
+    "figS6": "Figure S6 – Max event triptych (Max WUA, CC, Max RP)",
+    "figS7": "Figure S7 – Max-event recovery drivers scatter (1×2, color-coded)",
+    "figS8": "Figure S8 – Skewness maps",
+}
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Create manuscript figures for the hurricane recovery potential "
+            "study.  Run inside climada_env for full functionality."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Available figures:\n"
+        + "\n".join(f"  {k}: {v}" for k, v in ALL_FIGS.items()),
+    )
+    parser.add_argument(
+        "--figures",
+        nargs="+",
+        choices=list(ALL_FIGS.keys()),
+        default=list(ALL_FIGS.keys()),
+        metavar="FIG",
+        help="Which figures to generate (default: all).",
+    )
+    args, _ = parser.parse_known_args()
+    figs_to_run = set(args.figures)
+
+    print("=" * 70)
+    print("Hurricane Recovery Potential – Manuscript Figures")
+    print("=" * 70)
+    print(f"Output directory : {FIGURES_DIR}")
+    print(f"Figures requested: {', '.join(sorted(figs_to_run))}")
+
+    # ── Spatial data (always required) ────────────────────────────────────
+    print("\nLoading spatial data …")
+    coastal_counties, state_gdf = load_spatial_data()
+
+    # ── Tabular metrics (required for most figures) ────────────────────────
+    METRIC_FIGS = {"fig2", "fig3", "figS5", "figS6", "figS7", "figS8"}
+    gdf = None
+
+    if figs_to_run & METRIC_FIGS:
+        print("\nLoading tabular metrics …")
+        eaua_df, earp_df, cc_df = load_annual_metrics()
+        event_df = load_event_level_metrics()
+        dist_df = load_distribution_metrics()
+        gdf = build_main_gdf(
+            coastal_counties, eaua_df, earp_df, cc_df, event_df, dist_df
+        )
+        print(f"  Main GeoDataFrame: {len(gdf)} counties")
+
+    # ── Hazard data (Figure S1 only) ───────────────────────────────────────
+    hazard_df = None
+    if "figS1" in figs_to_run:
+        hazard_df = load_hazard_data()
+
+    # ── Generate figures ───────────────────────────────────────────────────
+    print("\n" + "=" * 70)
+    print("Generating figures …")
+    print("=" * 70)
+
+    if "fig2" in figs_to_run:
+        fig2_annual_triptych(gdf, state_gdf)
+
+    if "fig3" in figs_to_run:
+        fig3_recovery_drivers_scatter(gdf)
+
+    if "figS1" in figs_to_run:
+        figS1_hazard_overview(coastal_counties, state_gdf, hazard_df)
+
+    if "figS2" in figs_to_run:
+        for eid in (350, 4347):
+            try:
+                figS2_single_event_map(coastal_counties, state_gdf, eid)
+            except FileNotFoundError as exc:
+                print(f"  Warning: {exc}")
+
+    if "figS5" in figs_to_run:
+        figS5_median_event_triptych(gdf, state_gdf)
+
+    if "figS6" in figs_to_run:
+        figS6_max_event_triptych(gdf, state_gdf)
+
+    if "figS7" in figs_to_run:
+        figS7_annual_max_scatter(gdf)
+
+    if "figS8" in figs_to_run:
+        figS8_skewness_maps(gdf, state_gdf)
+
+    print("\n" + "=" * 70)
+    print(f"Done.  All figures saved to: {FIGURES_DIR}")
+    print("=" * 70)
+
+
+if __name__ == "__main__":
+    main()
