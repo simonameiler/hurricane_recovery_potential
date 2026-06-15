@@ -50,13 +50,11 @@ python scripts/make_NA_exposure.py
 Build CLIMADA `TropCyclone` hazard from Gori wind-field `.mat` files.
 
 ```bash
-# cluster array (recommended; ~5018 events split into chunks)
+# cluster array (required; ~5018 events split into chunks)
 sbatch batch/sbatch_make_haz_gori_array.sh
 python scripts/concat_haz_gori_chunks.py \
     --pattern 'tc_ncep_reanal_chunk*.hdf5' \
     --output <climada_data>/hazard/tropical_cyclone/gori/tc_ncep_reanal.hdf5
-# local (single run)
-python scripts/make_haz_gori.py
 ```
 
 ### Stage 3 — Multi-hazard scaling
@@ -119,25 +117,32 @@ python scripts/create_validation_figures.py
 ### Stage 6 — Recovery (EARP)
 
 ```bash
-python scripts/TC_NA_recovery_analysis_reorganized_complete.py
+python scripts/compute_recovery_potential.py
 # → analysis_output/earp_per_county.csv
 ```
 
 ### Stage 7 — Manuscript figures
 
 ```bash
-# Fig 2 (annual_3panel), Fig 3 (recovery_drivers_annual_vs_median),
-# Fig S1 (na_coast_hazard_overview), Fig S2 (event_350 / event_4347 3-panel),
-# Fig S5 (median_event_3panel), Fig S6 (max_event_3panel),
-# Fig S7 (recovery_drivers_annual_max), Fig S8 (skewness_maps):
+# All figures (Fig 2, 3, 4, S1, S2, S5, S6, S7, S8):
 python scripts/create_manuscript_figures.py
 # → analysis_output/figures/{stem}.png + .pdf  (300 dpi)
 
-# Fig 4 (bivariate maps — risk × capacity, risk × recovery potential):
-python scripts/create_bivariate_maps.py
-# → analysis_output/bivariate_map_{A,B}_*.{png,pdf}
-# → analysis_output/bivariate_maps_combined.{png,pdf}
+# Specific figures only:
+python scripts/create_manuscript_figures.py --figures fig2 fig3
+python scripts/create_manuscript_figures.py --figures fig4   # bivariate maps
 ```
+
+Figures produced:
+- Fig 2  `annual_3panel`  — EAUA, CC, EARP triptych
+- Fig 3  `recovery_drivers_annual_vs_median`  — 2×2 scatter
+- Fig 4  `bivariate_maps_combined` + individual panels  — Risk × CC and Risk × Recovery Potential
+- Fig S1 `na_coast_hazard_overview`
+- Fig S2 `event_350_3panel_map`, `event_4347_3panel_map`
+- Fig S5 `median_event_3panel`
+- Fig S6 `max_event_3panel`
+- Fig S7 `recovery_drivers_annual_max`
+- Fig S8 `skewness_wd`, `skewness_rt`
 
 The Spearman ρ values reported in the text (annual EARP vs EAUA and vs CC;
 per-event median recovery vs EAUA and vs CC) are computed and annotated
@@ -164,7 +169,7 @@ Requires `data/external/NRI_Table_Counties.csv` (already committed).
 | Module | Imported by |
 |--------|------------|
 | `modules/exposure_utils.py` | `make_NA_exposure.py`, `make_state_exposures.py` |
-| `modules/hazard_utils.py` | `make_haz_gori.py`, `make_haz_gori_chunks.py` |
+| `modules/hazard_utils.py` | `make_haz_gori_chunks.py` |
 | `modules/impact_utils.py` | `calc_state_impact.py`, `combine_aggregated_outputs.py` |
 | `modules/impfunc_utils.py` | `calc_state_impact.py` |
 
@@ -176,7 +181,7 @@ Requires `data/external/NRI_Table_Counties.csv` (already committed).
 |-----------------|--------|-------------|
 | Fig 2 (annual triptych) | `create_manuscript_figures.py` | `figures/annual_3panel.{png,pdf}` |
 | Fig 3 (driver scatter) | `create_manuscript_figures.py` | `figures/recovery_drivers_annual_vs_median.{png,pdf}` |
-| Fig 4 (bivariate maps) | `create_bivariate_maps.py` | `bivariate_map_{A,B}_*.{png,pdf}` |
+| Fig 4 (bivariate maps) | `create_manuscript_figures.py` | `figures/bivariate_map_{A,B}_*.{png,pdf}` |
 | Fig S1 (hazard overview) | `create_manuscript_figures.py` | `figures/na_coast_hazard_overview.{png,pdf}` |
 | Fig S2 (event 350 / 4347) | `create_manuscript_figures.py` | `figures/event_{350,4347}_3panel_map.{png,pdf}` |
 | Fig S5 (median event) | `create_manuscript_figures.py` | `figures/median_event_3panel.{png,pdf}` |
