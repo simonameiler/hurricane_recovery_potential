@@ -15,6 +15,9 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
+SCRIPT_DIR = Path(__file__).parent
+BASE_DIR = SCRIPT_DIR.parent
+
 # Configuration
 RECOVERY_WEIGHTS = {
     'DS1': 1.0,
@@ -27,7 +30,7 @@ def load_event_data():
     """Load all per-event scaled impact data."""
     print("Loading per-event impact data...")
     
-    by_event_dir = Path("..") / "impacts_out" / "by_event" / "scaled"
+    by_event_dir = BASE_DIR / "impacts_out" / "by_event" / "scaled"
     event_files = sorted(by_event_dir.glob("*_scaled.csv"))
     
     print(f"Found {len(event_files)} event files")
@@ -55,7 +58,7 @@ def load_housing_stock():
     print("\nLoading housing stock data...")
     
     # Load from county exposure summary
-    county_file = Path("..") / "analysis_output" / "county_exposed_housing_units.csv"
+    county_file = BASE_DIR / "analysis_output" / "county_exposed_housing_units.csv"
     
     if county_file.exists():
         housing_df = pd.read_csv(county_file)
@@ -251,7 +254,7 @@ def main():
     print_top_counties(county_metrics, n=10)
     
     # Save results
-    output_file = Path("..") / "analysis_output" / "county_event_frequency_damage_metrics.csv"
+    output_file = BASE_DIR / "analysis_output" / "county_event_frequency_damage_metrics.csv"
     county_metrics.to_csv(output_file, index=False)
     print(f"\n{'='*80}")
     print(f"Results saved to: {output_file}")

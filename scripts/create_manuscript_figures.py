@@ -17,7 +17,7 @@ Supplementary
   Figure S7 recovery_drivers_annual_max.png / .pdf (2×2 scatter annual + max)
   Figure S8 skewness_maps.png / .pdf
 
-All outputs are saved to analysis_output/figures/ as PNG (300 dpi) and PDF.
+All outputs are saved to analysis_output/ as PNG (300 dpi).
 
 Run with:
   conda activate climada_env && python scripts/create_manuscript_figures.py
@@ -37,7 +37,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.colors import LogNorm, Normalize
-from matplotlib.ticker import LogLocator, NullLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.stats import spearmanr
 
@@ -61,7 +60,7 @@ SCRIPT_DIR = Path(__file__).parent
 BASE_DIR = SCRIPT_DIR.parent
 DATA_DIR = BASE_DIR / "data"
 OUTPUT_DIR = BASE_DIR / "analysis_output"
-FIGURES_DIR = OUTPUT_DIR / "figures"
+FIGURES_DIR = OUTPUT_DIR
 
 DEFAULT_FREQ = 0.00067334  # events per year (Poisson rate)
 RECOVERY_WEIGHTS = {"DS1": 1.0, "DS2": 1.0, "DS3": 3.0, "DS4": 6.0}
@@ -143,8 +142,8 @@ def _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label,
         if np.isfinite(vmin) and np.isfinite(vmax) and vmin > 0:
             norm = LogNorm(vmin=vmin / 2, vmax=vmax)
 
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("bottom", size="4%", pad=0.3)
+    # Colorbar axis slightly wider than the map panel
+    cax = ax.inset_axes([0.125, -0.12, 0.75, 0.05])
 
     tmp.plot(
         column=col, cmap=cmap, norm=norm,
@@ -169,11 +168,12 @@ def _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label,
 
     # Colorbar styling
     if invert_cbar:
+        cax.invert_xaxis()
         cax.set_xticks([])
-        cax.set_xlabel("High     Recovery potential     Low", fontsize=9, labelpad=3)
+        cax.set_xlabel("Low     Recovery potential     High", fontsize=7, labelpad=3)
     else:
-        cax.set_xlabel(cbar_label, fontsize=9, labelpad=2)
-        cax.tick_params(labelsize=8)
+        cax.set_xlabel(cbar_label, fontsize=7, labelpad=2)
+        cax.tick_params(labelsize=6)
         cax.tick_params(which="minor", length=0)
     for spine in cax.spines.values():
         spine.set_edgecolor("black")
@@ -198,9 +198,11 @@ def _scatter_panel(ax, x, y, xlabel, ylabel, panel_label=None,
     ax.scatter(xv, yv, alpha=alpha, s=s, color=color, linewidths=0)
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel(xlabel, fontsize=9)
-    ax.set_ylabel(ylabel, fontsize=9)
-    ax.tick_params(labelsize=8)
+    ax.set_xlabel(xlabel, fontsize=7)
+    ax.set_ylabel(ylabel, fontsize=7)
+    ax.tick_params(axis="x", which="major", labelsize=6)
+    ax.tick_params(axis="x", which="minor", length=0, width=0)
+    ax.tick_params(axis="y", which="both", left=False, labelleft=False)
 
     for spine in ax.spines.values():
         spine.set_edgecolor("0.4")
@@ -212,15 +214,15 @@ def _scatter_panel(ax, x, y, xlabel, ylabel, panel_label=None,
         ax.text(
             0.04, 0.96,
             f"ρ = {r:+.2f}\nn = {n:,}",
-            transform=ax.transAxes, fontsize=8,
+            transform=ax.transAxes, fontsize=6,
             va="top", ha="left",
             bbox=dict(boxstyle="round,pad=0.25", fc="white",
                       ec="0.7", alpha=0.85),
         )
 
     if panel_label is not None:
-        ax.text(0.02, 0.98, f"({panel_label})", transform=ax.transAxes,
-                fontsize=10, fontweight="bold", va="top", ha="left")
+        ax.text(0.02, 0.98, f"{panel_label})", transform=ax.transAxes,
+                fontsize=8, fontweight="bold", va="top", ha="left")
 
 
 def _color_scatter_panel(ax, x, y, c, xlabel, ylabel, clabel,
@@ -256,9 +258,9 @@ def _color_scatter_panel(ax, x, y, c, xlabel, ylabel, clabel,
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.invert_yaxis()
-    ax.set_xlabel(xlabel, fontsize=9)
+    ax.set_xlabel(xlabel, fontsize=7)
     if show_yticks:
-        ax.set_ylabel(ylabel, fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=7)
     ax.grid(False)
 
     for spine in ax.spines.values():
@@ -266,18 +268,14 @@ def _color_scatter_panel(ax, x, y, c, xlabel, ylabel, clabel,
         spine.set_linewidth(0.8)
     ax.tick_params(color="0.4", labelcolor="0.2")
 
-    ax.xaxis.set_major_locator(LogLocator(base=10))
-    ax.tick_params(axis="x", which="major", bottom=True, top=False,
-                   labelbottom=True, labelsize=8)
-    ax.tick_params(axis="x", which="minor", bottom=False)
-    ax.tick_params(axis="y", which="both",
-                   left=show_yticks, right=False,
-                   labelleft=show_yticks, labelsize=8)
+    ax.tick_params(axis="x", which="major", labelsize=6)
+    ax.tick_params(axis="x", which="minor", length=0, width=0)
+    ax.tick_params(axis="y", which="both", left=False, labelleft=False)
 
     # Side colorbar
     cbar = plt.colorbar(sc, ax=ax)
-    cbar.set_label(clabel, fontsize=8)
-    cbar.ax.tick_params(which="both", labelsize=8)
+    cbar.set_label(clabel, fontsize=7)
+    cbar.ax.tick_params(which="both", labelsize=6)
     cbar.ax.tick_params(which="minor", length=0)
     for spine in cbar.ax.spines.values():
         spine.set_edgecolor("black")
@@ -289,13 +287,13 @@ def _color_scatter_panel(ax, x, y, c, xlabel, ylabel, clabel,
         corr_x = 0.05 if show_yticks else 0.35
         ax.text(
             corr_x, 0.02,
-            f"\u03c1 = {r:+.3f}\nn = {len(xv):,}",
-            transform=ax.transAxes, fontsize=9, va="bottom",
+            f"\u03c1 = {r:+.2f}\nn = {len(xv):,}",
+            transform=ax.transAxes, fontsize=6, va="bottom",
         )
 
     if panel_label is not None:
-        ax.text(0.02, 0.98, f"({panel_label})", transform=ax.transAxes,
-                fontsize=10, fontweight="bold", va="top", ha="left")
+        ax.text(0.02, 0.98, f"{panel_label})", transform=ax.transAxes,
+                fontsize=8, fontweight="bold", va="top", ha="left")
 
     return cbar
 
@@ -571,16 +569,15 @@ def fig2_annual_triptych(gdf, state_gdf):
     fig, axes = plt.subplots(1, 3, figsize=(W_DOUBLE, 3.3))
 
     panels = [
-        ("eaua", "cividis",  "EAUA [weighted units / yr]",              False),
-        ("cc",   "Greens",   "Construction capacity [permits / month]",  False),
+        ("eaua", "cividis",  "EAUA [weighted units yr⁻¹]",              False),
+        ("cc",   "Greens",   "CC [permits month⁻¹]",  False),
         ("earp", "Purples_r",  "Recovery potential",                       True),
     ]
     labels = ["a", "b", "c"]
 
     for ax, (col, cmap, cbar_label, inv), lbl in zip(axes, panels, labels):
         _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label, invert_cbar=inv)
-        ax.text(0.02, 0.98, f"({lbl})", transform=ax.transAxes,
-                fontsize=10, fontweight="bold", va="top", ha="left")
+        ax.set_title(f"{lbl})", loc="left", fontsize=8, fontweight="bold", pad=2)
 
     print("  Summary:")
     for col, _, label, *__ in panels:
@@ -604,23 +601,23 @@ def fig3_recovery_drivers_scatter(gdf):
     """
     print("\nFigure 3: Recovery drivers scatter (annual + median event) …")
 
-    fig, axes = plt.subplots(2, 2, figsize=(W_DOUBLE, 5.8))
+    fig, axes = plt.subplots(2, 2, figsize=(W_DOUBLE, 4.2))
 
     # Row 0 – annual
     _color_scatter_panel(
         axes[0, 0], gdf["eaua"], gdf["earp"], gdf["cc"],
-        xlabel="AU (weighted)",
+        xlabel="EAUA",
         ylabel="RP (low\u2013high)",
-        clabel="CC (permits/month)",
+        clabel="CC",
         cmap="viridis",
         panel_label="a",
         show_yticks=True,
     )
     _color_scatter_panel(
         axes[0, 1], gdf["cc"], gdf["earp"], gdf["eaua"],
-        xlabel="CC (permits/month)",
+        xlabel="CC",
         ylabel="RP (low\u2013high)",
-        clabel="AU (weighted)",
+        clabel="EAUA",
         cmap="plasma",
         panel_label="b",
         show_yticks=False,
@@ -630,9 +627,9 @@ def fig3_recovery_drivers_scatter(gdf):
     _color_scatter_panel(
         axes[1, 0], gdf["median_weighted_damage"], gdf["median_recovery_months"],
         gdf["cc"],
-        xlabel="AU (weighted)",
+        xlabel="WUA",
         ylabel="RP (low\u2013high)",
-        clabel="CC (permits/month)",
+        clabel="CC",
         cmap="viridis",
         panel_label="c",
         show_yticks=True,
@@ -640,25 +637,25 @@ def fig3_recovery_drivers_scatter(gdf):
     _color_scatter_panel(
         axes[1, 1], gdf["cc"], gdf["median_recovery_months"],
         gdf["median_weighted_damage"],
-        xlabel="CC (permits/month)",
+        xlabel="CC",
         ylabel="RP (low\u2013high)",
-        clabel="AU (weighted)",
+        clabel="WUA",
         cmap="plasma",
         panel_label="d",
         show_yticks=False,
     )
 
     # Row labels
-    fig.text(0.02, 0.75, "annual", rotation=90, va="center", ha="center",
-             fontsize=9, fontweight="bold")
-    fig.text(0.02, 0.27, "median event", rotation=90, va="center", ha="center",
-             fontsize=9, fontweight="bold")
+    fig.text(0.02, 0.78, "annual", rotation=90, va="center", ha="center",
+             fontsize=7, fontweight="bold")
+    fig.text(0.02, 0.30, "median event", rotation=90, va="center", ha="center",
+             fontsize=7, fontweight="bold")
 
     # Legend (no box)
     fig.text(
-        0.98, 0.50,
-        "RP = recovery potential\nAU = affected units\nCC = construction capacity",
-        va="center", ha="left", fontsize=8,
+        0.9, 0.50,
+        "EAUA = expected annual affected units\nWUA = weighted affected units\nCC = construction capacity\nRP = recovery potential",
+        va="center", ha="left", fontsize=6,
     )
 
     plt.tight_layout(rect=[0.05, 0, 0.90, 1])
@@ -688,17 +685,16 @@ def figS1_hazard_overview(coastal_counties, state_gdf, hazard_df):
     fig, axes = plt.subplots(1, 3, figsize=(W_DOUBLE, 3.3))
 
     panels = [
-        ("max_wind_ms",  "YlOrRd",  "Max wind speed [m/s]",       False),
+        ("max_wind_ms",  "YlOrRd",  "Max wind speed [m s⁻¹]",       False),
         ("max_rain_mm",  "Blues",   "Max rainfall [mm]",           False),
-        ("max_surge_m",  "viridis", "Max storm surge [m MHHW]",   False),
+        ("max_surge_m",  "viridis", "Max storm surge [m]",   False),
     ]
     labels = ["a", "b", "c"]
 
     for ax, (col, cmap, cbar_label, inv), lbl in zip(axes, panels, labels):
         _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label,
                           invert_cbar=inv, use_log=False)
-        ax.text(0.02, 0.98, f"({lbl})", transform=ax.transAxes,
-                fontsize=10, fontweight="bold", va="top", ha="left")
+        ax.set_title(f"{lbl})", loc="left", fontsize=8, fontweight="bold", pad=2)
 
     print("  Summary:")
     for col, _, label, *__ in panels:
@@ -731,8 +727,8 @@ def figS2_single_event_map(coastal_counties, state_gdf, event_id):
     fig, axes = plt.subplots(1, 3, figsize=(W_DOUBLE, 3.3))
 
     panels = [
-        ("weighted_damage", "cividis", "Weighted damage [units]",                False),
-        ("cc",              "Greens",  "Construction capacity [permits / month]", False),
+        ("weighted_damage", "cividis", "WUA [units]",                False),
+        ("cc",              "Greens",  "CC [permits month⁻¹]", False),
         ("recovery_months", "Purples_r", "Recovery potential",                      True),
     ]
     labels = ["a", "b", "c"]
@@ -741,8 +737,7 @@ def figS2_single_event_map(coastal_counties, state_gdf, event_id):
 
     for ax, (col, cmap, cbar_label, inv), lbl in zip(axes, panels, labels):
         _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label, invert_cbar=inv)
-        ax.text(0.02, 0.98, f"({lbl})", transform=ax.transAxes,
-                fontsize=10, fontweight="bold", va="top", ha="left")
+        ax.set_title(f"{lbl})", loc="left", fontsize=8, fontweight="bold", pad=2)
 
     print(f"  Affected counties: {n_affected}")
     print("  Summary:")
@@ -767,16 +762,15 @@ def figS5_median_event_triptych(gdf, state_gdf):
     fig, axes = plt.subplots(1, 3, figsize=(W_DOUBLE, 3.3))
 
     panels = [
-        ("median_weighted_damage", "cividis", "Median WUA [weighted units]",              False),
-        ("cc",                     "Greens",  "Construction capacity [permits / month]",  False),
+        ("median_weighted_damage", "cividis", "WUA [units]",              False),
+        ("cc",                     "Greens",  "CC [permits month⁻¹]",  False),
         ("median_recovery_months", "Purples_r", "Recovery potential",                       True),
     ]
     labels = ["a", "b", "c"]
 
     for ax, (col, cmap, cbar_label, inv), lbl in zip(axes, panels, labels):
         _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label, invert_cbar=inv)
-        ax.text(0.02, 0.98, f"({lbl})", transform=ax.transAxes,
-                fontsize=10, fontweight="bold", va="top", ha="left")
+        ax.set_title(f"{lbl})", loc="left", fontsize=8, fontweight="bold", pad=2)
 
     print("  Summary:")
     for col, _, label, *__ in panels:
@@ -800,16 +794,15 @@ def figS6_max_event_triptych(gdf, state_gdf):
     fig, axes = plt.subplots(1, 3, figsize=(W_DOUBLE, 3.3))
 
     panels = [
-        ("max_weighted_damage",  "cividis", "Max WUA [weighted units]",                False),
-        ("cc",                   "Greens",  "Construction capacity [permits / month]",  False),
+        ("max_weighted_damage",  "cividis", "WUA [units]",                False),
+        ("cc",                   "Greens",  "CC [permits month⁻¹]",  False),
         ("max_recovery_months",  "Purples_r", "Recovery potential",                       True),
     ]
     labels = ["a", "b", "c"]
 
     for ax, (col, cmap, cbar_label, inv), lbl in zip(axes, panels, labels):
         _choropleth_panel(gdf, state_gdf, ax, col, cmap, cbar_label, invert_cbar=inv)
-        ax.text(0.02, 0.98, f"({lbl})", transform=ax.transAxes,
-                fontsize=10, fontweight="bold", va="top", ha="left")
+        ax.set_title(f"{lbl})", loc="left", fontsize=8, fontweight="bold", pad=2)
 
     print("  Summary:")
     for col, _, label, *__ in panels:
@@ -833,33 +826,33 @@ def figS7_annual_max_scatter(gdf):
     """
     print("\nFigure S7: Max-event recovery drivers scatter …")
 
-    fig, axes = plt.subplots(1, 2, figsize=(W_DOUBLE, 3.2))
+    fig, axes = plt.subplots(1, 2, figsize=(W_DOUBLE, 2.2))
 
     _color_scatter_panel(
         axes[0], gdf["max_weighted_damage"], gdf["max_recovery_months"], gdf["cc"],
-        xlabel="AU (weighted)",
+        xlabel="WUA",
         ylabel="RP (low\u2013high)",
-        clabel="CC (permits/month)",
+        clabel="CC",
         cmap="viridis",
         panel_label="a",
         show_yticks=True,
     )
     _color_scatter_panel(
         axes[1], gdf["cc"], gdf["max_recovery_months"], gdf["max_weighted_damage"],
-        xlabel="CC (permits/month)",
+        xlabel="CC",
         ylabel="RP (low\u2013high)",
-        clabel="AU (weighted)",
+        clabel="WUA",
         cmap="plasma",
         panel_label="b",
         show_yticks=False,
     )
 
     fig.text(0.02, 0.55, "maximum value", rotation=90, va="center", ha="center",
-             fontsize=9, fontweight="bold")
+             fontsize=7, fontweight="bold")
     fig.text(
-        0.98, 0.50,
-        "RP = recovery potential\nAU = affected units\nCC = construction capacity",
-        va="center", ha="left", fontsize=8,
+        0.95, 0.50,
+        "WUA = weighted affected units\nCC = construction capacity\nRP = recovery potential",
+        va="center", ha="left", fontsize=6,
     )
 
     plt.tight_layout(rect=[0.05, 0, 0.93, 1])
@@ -910,11 +903,9 @@ def _skewness_single_panel(gdf, state_gdf, col, cbar_label, stem):
     ax.set_ylim(MAP_YLIM)
     ax.set_aspect("equal")
     ax.axis("off")
-    ax.text(0.02, 0.98, "(a)", transform=ax.transAxes,
-            fontsize=10, fontweight="bold", va="top", ha="left")
 
-    cax.set_ylabel(cbar_label, fontsize=9, labelpad=3)
-    cax.tick_params(labelsize=8)
+    cax.set_ylabel(cbar_label, fontsize=7, labelpad=3)
+    cax.tick_params(labelsize=6)
     cax.tick_params(which="minor", length=0)
     for spine in cax.spines.values():
         spine.set_edgecolor("black")
@@ -1012,8 +1003,22 @@ def _bv_prepare_gdf(coastal_counties, eaua_df, earp_df, cc_df):
 
 def _bv_legend(ax, colors_display, xlabel, ylabel,
                x_low="Low", x_high="High", y_low="Low", y_high="High",
-               bbox=(0.72, 0.01, 0.27, 0.34)):
-    """Draw a 3×3 bivariate colour legend as an inset on *ax*."""
+               bbox=(0.72, 0.01, 0.27, 0.34),
+               xlabel_pos=(2.5, -1.8),
+               ylabel_pos=(-2.2, 1.3),
+               tick_spread=0.4,
+               tick_offset=1.1):
+    """
+    Draw a 3×3 bivariate colour legend as an inset on *ax*.
+
+    Label tuning parameters
+    -----------------------
+    xlabel_pos   : (x, y) data-coords for the x-axis name (e.g. "Risk")
+    ylabel_pos   : (x, y) data-coords for the y-axis name (e.g. "CC")
+    tick_spread  : how far Low/High labels extend beyond the arrow endpoints
+                   (arrow runs 0→3; spread=0.4 → Low at -0.4, High at 3.4)
+    tick_offset  : perpendicular distance of Low/High labels from the arrow line
+    """
     axins = ax.inset_axes(bbox)
     for row_idx in range(3):
         for col_idx in range(3):
@@ -1037,39 +1042,45 @@ def _bv_legend(ax, colors_display, xlabel, ylabel,
                    xycoords="data", textcoords="data",
                    arrowprops=kw, annotation_clip=False)
 
-    axins.text(1.3, -1.05, xlabel, ha="center", va="top",
+    axins.text(*xlabel_pos, xlabel, ha="center", va="top",
                fontsize=7, transform=axins.transData, clip_on=False)
-    axins.text(-1.3, 1.3, ylabel, ha="center", va="center",
+    axins.text(*ylabel_pos, ylabel, ha="center", va="center",
                fontsize=7, rotation=90, transform=axins.transData, clip_on=False)
-    axins.text(0.0, -0.65, x_low,  ha="left",  va="top",
+    axins.text(-tick_spread, -tick_offset, x_low,  ha="left",  va="top",
                fontsize=6, transform=axins.transData, clip_on=False)
-    axins.text(3.0, -0.65, x_high, ha="right", va="top",
+    axins.text(3 + tick_spread, -tick_offset, x_high, ha="right", va="top",
                fontsize=6, transform=axins.transData, clip_on=False)
-    axins.text(-0.65, 0.0, y_low,  ha="right", va="bottom",
+    axins.text(-tick_offset, -tick_spread, y_low,  ha="right", va="bottom",
                fontsize=6, rotation=90, transform=axins.transData, clip_on=False)
-    axins.text(-0.65, 3.0, y_high, ha="right", va="top",
+    axins.text(-tick_offset, 3 + tick_spread, y_high, ha="right", va="top",
                fontsize=6, rotation=90, transform=axins.transData, clip_on=False)
     return axins
 
 
 def _bv_render_map(gdf, state_gdf, color_col, ax,
                    colors_display=None, xlabel="", ylabel="",
-                   y_low="Low", y_high="High", panel_label=None):
-    """Plot bivariate choropleth with optional legend inset on *ax*."""
+                   y_low="Low", y_high="High", panel_label=None,
+                   legend_bbox=(0.72, 0.01, 0.27, 0.34),
+                   **legend_kwargs):
+    """Plot bivariate choropleth with optional legend inset on *ax*.
+
+    Extra keyword arguments (xlabel_pos, ylabel_pos, tick_spread, tick_offset)
+    are forwarded directly to _bv_legend.
+    """
     gdf.plot(ax=ax, color=gdf[color_col],
              edgecolor=COUNTY_EDGECOLOR, linewidth=0.15)
     state_gdf.plot(ax=ax, facecolor="none",
-                   edgecolor=STATE_EDGECOLOR, linewidth=0.7)
+                   edgecolor=STATE_EDGECOLOR, linewidth=0.4)
     ax.set_xlim(MAP_XLIM)
     ax.set_ylim(MAP_YLIM)
     ax.set_aspect("equal")
     ax.axis("off")
     if panel_label is not None:
-        ax.text(0.02, 0.98, panel_label, transform=ax.transAxes,
-                fontsize=12, fontweight="bold", va="top", ha="left")
+        ax.set_title(f"{panel_label})", loc="left", fontsize=8, fontweight="bold", pad=2)
     if colors_display is not None:
         _bv_legend(ax, colors_display, xlabel=xlabel, ylabel=ylabel,
-                   y_low=y_low, y_high=y_high)
+                   y_low=y_low, y_high=y_high, bbox=legend_bbox,
+                   **legend_kwargs)
 
 
 def _bv_print_summary(gdf):
@@ -1084,48 +1095,69 @@ def _bv_print_summary(gdf):
                   f"  p67={valid.quantile(2/3):.4f}  n={len(valid)}")
 
 
+def _bv_single_panel(gdf, state_gdf, color_col, grid, xlabel, ylabel,
+                     y_low, y_high, stem,
+                     legend_bbox=(0.667, 0.01, 0.33, 0.36),
+                     **legend_kwargs):
+    """Save one W_SINGLE bivariate map with its own legend inset.
+
+    Extra keyword arguments (xlabel_pos, ylabel_pos, tick_spread, tick_offset)
+    are forwarded to _bv_legend via _bv_render_map.
+    """
+    fig, ax = plt.subplots(1, 1, figsize=(W_SINGLE, 3))
+    _bv_render_map(gdf, state_gdf, color_col, ax,
+                   colors_display=grid,
+                   xlabel=xlabel, ylabel=ylabel,
+                   y_low=y_low, y_high=y_high,
+                   legend_bbox=legend_bbox,
+                   **legend_kwargs)
+    plt.tight_layout()
+    _save_fig(fig, stem)
+    plt.close()
+
+
 def fig4_bivariate_maps(coastal_counties, state_gdf, eaua_df, earp_df, cc_df):
     """
-    Figure 4: 1×2 bivariate choropleth.
-    Panel a (left)  – Risk (EAUA) × Construction Capacity (CC)
-    Panel b (right) – Risk (EAUA) × Recovery Potential (EARP)
+    Figure 4: bivariate choropleths.
+
+    Combined (W_DOUBLE, 1×2) with abbreviation legend — main publication figure.
+    Individual panels (W_SINGLE) saved separately for supplementary/reuse.
     """
     print("\nFigure 4: Bivariate maps …")
     gdf = _bv_prepare_gdf(coastal_counties, eaua_df, earp_df, cc_df)
     _bv_print_summary(gdf)
 
-    # Combined 2-panel (main publication figure)
-    fig, axes = plt.subplots(1, 2, figsize=(9, 4))
+    # ── Combined 1×2 figure ───────────────────────────────────────────────────
+    fig, axes = plt.subplots(1, 2, figsize=(W_DOUBLE, 3))
     _bv_render_map(gdf, state_gdf, "color_b", axes[0],
                    colors_display=GRID_B,
-                   xlabel="Risk (EAUA)", ylabel="Construction capacity",
-                   y_low="High", y_high="Low", panel_label="a")
+                   xlabel="Risk", ylabel="CC",
+                   y_low="High", y_high="Low", panel_label="a",
+                   xlabel_pos=(1.5, -1.5), ylabel_pos=(-2.0, 1.5),
+                   tick_spread=0.4, tick_offset=0.8)
     _bv_render_map(gdf, state_gdf, "color_a", axes[1],
                    colors_display=GRID_A,
-                   xlabel="Risk (EAUA)", ylabel="Recovery potential",
-                   y_low="High", y_high="Low", panel_label="b")
+                   xlabel="Risk", ylabel="RP",
+                   y_low="High", y_high="Low", panel_label="b",
+                   xlabel_pos=(1.5, -1.5), ylabel_pos=(-2.0, 1.5),
+                   tick_spread=0.4, tick_offset=0.8)
     plt.tight_layout(pad=0.3)
     _save_fig(fig, "bivariate_maps_combined")
     plt.close()
 
-    # Individual panels
-    fig_b, ax_b = plt.subplots(1, 1, figsize=(8, 6))
-    _bv_render_map(gdf, state_gdf, "color_b", ax_b,
-                   colors_display=GRID_B,
-                   xlabel="Risk (EAUA)", ylabel="Construction capacity",
-                   y_low="High", y_high="Low")
-    plt.tight_layout()
-    _save_fig(fig_b, "bivariate_map_B_risk_vs_capacity")
-    plt.close()
-
-    fig_a, ax_a = plt.subplots(1, 1, figsize=(8, 6))
-    _bv_render_map(gdf, state_gdf, "color_a", ax_a,
-                   colors_display=GRID_A,
-                   xlabel="Risk (EAUA)", ylabel="Recovery potential",
-                   y_low="High", y_high="Low")
-    plt.tight_layout()
-    _save_fig(fig_a, "bivariate_map_A_risk_vs_recovery")
-    plt.close()
+    # ── Individual W_SINGLE panels ────────────────────────────────────────────
+    _bv_single_panel(gdf, state_gdf, "color_b", GRID_B,
+                     xlabel="Risk", ylabel="CC",
+                     y_low="High", y_high="Low",
+                     xlabel_pos=(1.5, -1.5), ylabel_pos=(-1.8, 1.5),
+                     tick_spread=0.4, tick_offset=0.8,
+                     stem="bivariate_map_B_risk_vs_capacity")
+    _bv_single_panel(gdf, state_gdf, "color_a", GRID_A,
+                     xlabel="Risk", ylabel="RP",
+                     y_low="High", y_high="Low",
+                     xlabel_pos=(1.5, -1.5), ylabel_pos=(-1.8, 1.5),
+                     tick_spread=0.4, tick_offset=0.8,
+                     stem="bivariate_map_A_risk_vs_recovery")
 
 
 # ---------------------------------------------------------------------------
@@ -1154,6 +1186,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Available figures:\n"
         + "\n".join(f"  {k}: {v}" for k, v in ALL_FIGS.items()),
+        allow_abbrev=False,
     )
     parser.add_argument(
         "--figures",
