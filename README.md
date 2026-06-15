@@ -20,13 +20,13 @@ conda activate climada_env
 | Item | Location in repo | Notes |
 |------|-----------------|-------|
 | Gori TC wind-field `.mat` files | `climada_data/hazard/tropical_cyclone/gori/` | ~5018 events; Gori et al. (2025) |
-| Raw ACS/Census housing CSVs | `data/exposure/states/` | one CSV per coastal state |
+| Raw ACS/Census housing CSVs | `climada_data/exposure/building_inventory_NAcoast/` | one sub-dir per state |
 | pyrecodes per-event recovery JSONs | `data/recovery_potential_per_scenario/` | `{event_id}_scaled_recovery_potential.json` per event |
-| FEMA NRI county geodatabase | `data/external/NRI_GDB_CensusTracts.gdb` | 612 MB; download from FEMA |
 
 Small reference tables already committed: `data/US_counties.shp`, `data/county_region.csv`,
 `data/selected_states_counties_with_permits.csv`, `data/external/NRI_Table_Counties.csv`,
-`data/hazard/max{windmat,elev_coastcounty,ptot_rain_county}_ncep_reanal.mat`.
+`data/hazard/max{windmat,elev_coastcounty,ptot_rain_county}_ncep_reanal.mat`,
+`data/CAPRA_TO_BEM_TC_WIND_IMPACT_FUNCTIONS.csv`, `data/scaling_relative.npz`.
 
 ---
 
