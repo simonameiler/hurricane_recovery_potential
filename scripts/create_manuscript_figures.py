@@ -106,11 +106,10 @@ GRID_B = [
 # ---------------------------------------------------------------------------
 
 def _save_fig(fig, stem: str):
-    """Save figure as PNG (300 dpi) and PDF to FIGURES_DIR."""
+    """Save figure as PNG (300 dpi) to FIGURES_DIR."""
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-    for ext in ("png", "pdf"):
-        fig.savefig(FIGURES_DIR / f"{stem}.{ext}", dpi=300, bbox_inches="tight")
-    print(f"  Saved  {stem}.png  +  .pdf  →  {FIGURES_DIR}")
+    fig.savefig(FIGURES_DIR / f"{stem}.png", dpi=300, bbox_inches="tight")
+    print(f"  Saved  {stem}.png  →  {FIGURES_DIR}")
 
 
 # ---------------------------------------------------------------------------
