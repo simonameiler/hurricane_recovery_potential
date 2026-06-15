@@ -32,6 +32,7 @@ import warnings
 from pathlib import Path
 
 import geopandas as gpd
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -78,6 +79,26 @@ COUNTY_EDGECOLOR = "#aaaaaa"
 COUNTY_LINEWIDTH = 0.1
 STATE_EDGECOLOR = "#444444"
 STATE_LINEWIDTH = 0.3
+
+# ---------------------------------------------------------------------------
+# Bivariate color grids (Figure 4)
+# ---------------------------------------------------------------------------
+# Map A (EARP × EAUA) — Steven's pink-purple-blue scheme
+#   Row 0 = EARP tercile 1 (low EARP = high recovery, safe)
+#   Row 2 = EARP tercile 3 (high EARP = low recovery, concerning)
+#   Col 0 = EAUA tercile 1 (low risk), Col 2 = EAUA tercile 3 (high risk)
+GRID_A = [
+    ["#e8e8e8", "#ace4e4", "#5ac8c8"],
+    ["#dfb0d6", "#a5add3", "#5698b9"],
+    ["#be64ac", "#8c62aa", "#3b4994"],
+]
+# Map B (inv-CC × EAUA) — green scheme
+#   Row 0 = inv_cc=1 (high capacity, safe), Row 2 = inv_cc=3 (low capacity, concerning)
+GRID_B = [
+    ["#e8e8e8", "#ace4e4", "#5ac8c8"],
+    ["#b8d6be", "#90b2b3", "#567994"],
+    ["#73ae80", "#5a9178", "#2a5a5b"],
+]
 
 
 # ---------------------------------------------------------------------------
@@ -939,12 +960,183 @@ def figS8_skewness_maps(gdf, state_gdf):
 
 
 # ---------------------------------------------------------------------------
+# Figure 4 – Bivariate choropleth maps
+# ---------------------------------------------------------------------------
+
+def _bv_assign_tercile(series):
+    """Assign tercile labels 1/2/3 (float); non-positive / non-finite → NaN."""
+    valid = series.notna() & np.isfinite(series) & (series > 0)
+    result = pd.Series(np.nan, index=series.index, dtype=float)
+    if valid.sum() < 3:
+        return result
+    try:
+        labels = pd.qcut(series[valid], q=3, labels=[1, 2, 3], duplicates="drop")
+    except ValueError:
+        labels = pd.cut(series[valid], bins=3, labels=[1, 2, 3])
+    result[valid] = labels.astype(float)
+    return result
+
+
+def _bv_get_color(row, row_col, col_col, grid):
+    t_row, t_col = row[row_col], row[col_col]
+    if pd.isna(t_row) or pd.isna(t_col):
+        return NO_DATA_COLOR
+    return grid[int(t_row) - 1][int(t_col) - 1]
+
+
+def _bv_prepare_gdf(coastal_counties, eaua_df, earp_df, cc_df):
+    """Merge metrics into coastal county GDF and compute bivariate colors."""
+    metrics = (
+        eaua_df
+        .merge(earp_df, on="fips", how="outer")
+        .merge(cc_df,   on="fips", how="outer")
+    )
+    for col in ("eaua", "earp", "cc"):
+        metrics.loc[~(metrics[col] > 0), col] = np.nan
+
+    metrics["eaua_tercile"] = _bv_assign_tercile(metrics["eaua"])
+    metrics["earp_tercile"] = _bv_assign_tercile(metrics["earp"])
+    metrics["cc_tercile"]   = _bv_assign_tercile(metrics["cc"])
+
+    gdf = coastal_counties.merge(metrics, left_on="GEOID", right_on="fips", how="left")
+
+    gdf["color_a"] = gdf.apply(
+        lambda r: _bv_get_color(r, "earp_tercile", "eaua_tercile", GRID_A), axis=1
+    )
+    # Invert CC so high CC (safe) → row 0, low CC (risky) → row 2
+    gdf["inv_cc_tercile"] = 4 - gdf["cc_tercile"]
+    gdf["color_b"] = gdf.apply(
+        lambda r: _bv_get_color(r, "inv_cc_tercile", "eaua_tercile", GRID_B), axis=1
+    )
+    return gdf
+
+
+def _bv_legend(ax, colors_display, xlabel, ylabel,
+               x_low="Low", x_high="High", y_low="Low", y_high="High",
+               bbox=(0.72, 0.01, 0.27, 0.34)):
+    """Draw a 3×3 bivariate colour legend as an inset on *ax*."""
+    axins = ax.inset_axes(bbox)
+    for row_idx in range(3):
+        for col_idx in range(3):
+            rect = mpatches.Rectangle(
+                (col_idx, row_idx), 1, 1,
+                facecolor=colors_display[row_idx][col_idx],
+                edgecolor="white", linewidth=0.5,
+                transform=axins.transData,
+            )
+            axins.add_patch(rect)
+    axins.set_xlim(-1.0, 3.5)
+    axins.set_ylim(-1.0, 3.5)
+    axins.set_aspect("equal")
+    axins.axis("off")
+
+    kw = dict(arrowstyle="->", color="black", lw=0.8)
+    axins.annotate("", xy=(3.0, -0.5), xytext=(0.0, -0.5),
+                   xycoords="data", textcoords="data",
+                   arrowprops=kw, annotation_clip=False)
+    axins.annotate("", xy=(-0.5, 3.0), xytext=(-0.5, 0.0),
+                   xycoords="data", textcoords="data",
+                   arrowprops=kw, annotation_clip=False)
+
+    axins.text(1.3, -1.05, xlabel, ha="center", va="top",
+               fontsize=7, transform=axins.transData, clip_on=False)
+    axins.text(-1.3, 1.3, ylabel, ha="center", va="center",
+               fontsize=7, rotation=90, transform=axins.transData, clip_on=False)
+    axins.text(0.0, -0.65, x_low,  ha="left",  va="top",
+               fontsize=6, transform=axins.transData, clip_on=False)
+    axins.text(3.0, -0.65, x_high, ha="right", va="top",
+               fontsize=6, transform=axins.transData, clip_on=False)
+    axins.text(-0.65, 0.0, y_low,  ha="right", va="bottom",
+               fontsize=6, rotation=90, transform=axins.transData, clip_on=False)
+    axins.text(-0.65, 3.0, y_high, ha="right", va="top",
+               fontsize=6, rotation=90, transform=axins.transData, clip_on=False)
+    return axins
+
+
+def _bv_render_map(gdf, state_gdf, color_col, ax,
+                   colors_display=None, xlabel="", ylabel="",
+                   y_low="Low", y_high="High", panel_label=None):
+    """Plot bivariate choropleth with optional legend inset on *ax*."""
+    gdf.plot(ax=ax, color=gdf[color_col],
+             edgecolor=COUNTY_EDGECOLOR, linewidth=0.15)
+    state_gdf.plot(ax=ax, facecolor="none",
+                   edgecolor=STATE_EDGECOLOR, linewidth=0.7)
+    ax.set_xlim(MAP_XLIM)
+    ax.set_ylim(MAP_YLIM)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    if panel_label is not None:
+        ax.text(0.02, 0.98, panel_label, transform=ax.transAxes,
+                fontsize=12, fontweight="bold", va="top", ha="left")
+    if colors_display is not None:
+        _bv_legend(ax, colors_display, xlabel=xlabel, ylabel=ylabel,
+                   y_low=y_low, y_high=y_high)
+
+
+def _bv_print_summary(gdf):
+    print("  Tercile thresholds:")
+    for col, name in [("eaua", "EAUA (weighted units/yr)"),
+                      ("earp", "EARP (months/yr)"),
+                      ("cc",   "CC (permits/month)")]:
+        valid = gdf[col].dropna() if col in gdf.columns else pd.Series(dtype=float)
+        valid = valid[valid > 0]
+        if len(valid) > 0:
+            print(f"    {name:35s}  p33={valid.quantile(1/3):.4f}"
+                  f"  p67={valid.quantile(2/3):.4f}  n={len(valid)}")
+
+
+def fig4_bivariate_maps(coastal_counties, state_gdf, eaua_df, earp_df, cc_df):
+    """
+    Figure 4: 1×2 bivariate choropleth.
+    Panel a (left)  – Risk (EAUA) × Construction Capacity (CC)
+    Panel b (right) – Risk (EAUA) × Recovery Potential (EARP)
+    """
+    print("\nFigure 4: Bivariate maps …")
+    gdf = _bv_prepare_gdf(coastal_counties, eaua_df, earp_df, cc_df)
+    _bv_print_summary(gdf)
+
+    # Combined 2-panel (main publication figure)
+    fig, axes = plt.subplots(1, 2, figsize=(9, 4))
+    _bv_render_map(gdf, state_gdf, "color_b", axes[0],
+                   colors_display=GRID_B,
+                   xlabel="Risk (EAUA)", ylabel="Construction capacity",
+                   y_low="High", y_high="Low", panel_label="a")
+    _bv_render_map(gdf, state_gdf, "color_a", axes[1],
+                   colors_display=GRID_A,
+                   xlabel="Risk (EAUA)", ylabel="Recovery potential",
+                   y_low="High", y_high="Low", panel_label="b")
+    plt.tight_layout(pad=0.3)
+    _save_fig(fig, "bivariate_maps_combined")
+    plt.close()
+
+    # Individual panels
+    fig_b, ax_b = plt.subplots(1, 1, figsize=(8, 6))
+    _bv_render_map(gdf, state_gdf, "color_b", ax_b,
+                   colors_display=GRID_B,
+                   xlabel="Risk (EAUA)", ylabel="Construction capacity",
+                   y_low="High", y_high="Low")
+    plt.tight_layout()
+    _save_fig(fig_b, "bivariate_map_B_risk_vs_capacity")
+    plt.close()
+
+    fig_a, ax_a = plt.subplots(1, 1, figsize=(8, 6))
+    _bv_render_map(gdf, state_gdf, "color_a", ax_a,
+                   colors_display=GRID_A,
+                   xlabel="Risk (EAUA)", ylabel="Recovery potential",
+                   y_low="High", y_high="Low")
+    plt.tight_layout()
+    _save_fig(fig_a, "bivariate_map_A_risk_vs_recovery")
+    plt.close()
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 ALL_FIGS = {
     "fig2":  "Figure 2  – Annual triptych map (EAUA, CC, EARP)",
     "fig3":  "Figure 3  – Annual recovery drivers scatter (1×2, color-coded)",
+    "fig4":  "Figure 4  – Bivariate choropleth maps (Risk × CC, Risk × Recovery Potential)",
     "figS1": "Figure S1 – Hazard overview map (max wind, max surge)",
     "figS2": "Figure S2 – Single-event 3-panel maps (events 350 & 4347)",
     "figS5": "Figure S5 – Median event triptych (MUA, CC, MRP)",
@@ -987,11 +1179,15 @@ def main():
 
     # ── Tabular metrics (required for most figures) ────────────────────────
     METRIC_FIGS = {"fig2", "fig3", "figS5", "figS6", "figS7", "figS8"}
+    BIVARIATE_FIGS = {"fig4"}
     gdf = None
+    eaua_df = earp_df = cc_df = None
+
+    if figs_to_run & (METRIC_FIGS | BIVARIATE_FIGS):
+        print("\nLoading annual metrics …")
+        eaua_df, earp_df, cc_df = load_annual_metrics()
 
     if figs_to_run & METRIC_FIGS:
-        print("\nLoading tabular metrics …")
-        eaua_df, earp_df, cc_df = load_annual_metrics()
         event_df = load_event_level_metrics()
         dist_df = load_distribution_metrics()
         gdf = build_main_gdf(
@@ -1014,6 +1210,9 @@ def main():
 
     if "fig3" in figs_to_run:
         fig3_recovery_drivers_scatter(gdf)
+
+    if "fig4" in figs_to_run:
+        fig4_bivariate_maps(coastal_counties, state_gdf, eaua_df, earp_df, cc_df)
 
     if "figS1" in figs_to_run:
         figS1_hazard_overview(coastal_counties, state_gdf, hazard_df)
