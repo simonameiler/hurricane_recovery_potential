@@ -1,0 +1,17 @@
+name: climada_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy>=2.0
+  - pandas>=2.0
+  - geopandas>=1.0
+  - pyogrio>=0.10          # fast vector I/O backend for geopandas
+  - scipy>=1.10
+  - matplotlib-base>=3.8
+  - seaborn>=0.13
+  - scikit-learn>=1.5
+  - pip
+  - pip:
+    - climada>=6.0         # CLIMADA probabilistic risk model
