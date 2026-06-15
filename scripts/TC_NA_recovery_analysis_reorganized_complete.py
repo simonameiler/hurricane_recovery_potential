@@ -4850,7 +4850,14 @@ def main():
     ead_df, ead_wide, units_df = compute_expected_annual_damage()
     recovery_all_events = load_recovery_potential_data()
     earp_df = compute_expected_annual_recovery_potential(recovery_all_events)
-    
+
+    # Write EARP to CSV so downstream scripts (figure generators, NRI assessment)
+    # can read it without re-running the full recovery computation.
+    earp_out = Path("../analysis_output") / "earp_per_county.csv"
+    earp_out.parent.mkdir(exist_ok=True)
+    earp_df.to_csv(earp_out, index=False)
+    print(f"  Saved EARP → {earp_out}")
+
     # ========================================================================
     # STEP 2: Prepare analysis datasets
     # ========================================================================
