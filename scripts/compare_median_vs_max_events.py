@@ -20,6 +20,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pathlib import Path
 import json
 
+SCRIPT_DIR = Path(__file__).parent
+BASE_DIR = SCRIPT_DIR.parent
+
 # Configuration
 RECOVERY_WEIGHTS = {
     'DS1': 1.0,
@@ -41,7 +44,7 @@ def load_event_data():
     print("="*80)
     print("\n1. Loading per-event impact data...")
     
-    by_event_dir = Path("..") / "impacts_out" / "by_event" / "scaled"
+    by_event_dir = BASE_DIR / "impacts_out" / "by_event" / "scaled"
     event_files = sorted(by_event_dir.glob("*_scaled.csv"))
     
     print(f"   Found {len(event_files)} event files")
@@ -66,7 +69,7 @@ def load_recovery_data():
     """Load per-event recovery potential data."""
     print("\n2. Loading recovery potential data...")
     
-    recovery_dir = Path("..") / "data" / "recovery_potential_per_scenario"
+    recovery_dir = BASE_DIR / "data" / "recovery_potential_per_scenario"
     recovery_files = list(recovery_dir.glob("*_scaled_recovery_potential.json"))
     
     print(f"   Found {len(recovery_files)} recovery files")
@@ -96,7 +99,7 @@ def load_capacity_data():
     """Load construction capacity data."""
     print("\n3. Loading construction capacity data...")
     
-    permits_file = Path("..") / "data" / "selected_states_counties_with_permits.csv"
+    permits_file = BASE_DIR / "data" / "selected_states_counties_with_permits.csv"
     permits_df = pd.read_csv(permits_file)
     permits_df['fips'] = permits_df['FIPS'].astype(str).str.zfill(5)
     
@@ -113,7 +116,7 @@ def load_spatial_data():
     """Load county spatial boundaries."""
     print("\n4. Loading spatial data...")
     
-    counties = gpd.read_file(Path("..") / "data" / "US_counties.shp")
+    counties = gpd.read_file(BASE_DIR / "data" / "US_counties.shp")
     
     # Ensure GEOID exists
     if 'GEOID' not in counties.columns:
@@ -735,7 +738,7 @@ def print_comparison_statistics(median_metrics, max_metrics):
     print(f"  Max: {comparison['recovery_ratio'].max():.2f}x")
     
     # Save comparison
-    output_file = Path("..") / "analysis_output" / "median_vs_max_event_comparison.csv"
+    output_file = BASE_DIR / "analysis_output" / "median_vs_max_event_comparison.csv"
     comparison.to_csv(output_file, index=False)
     print(f"\nComparison data saved to: {output_file}")
     
@@ -764,7 +767,7 @@ def main():
     print("CREATING MAPS")
     print("="*80)
     
-    output_dir = Path("..") / "analysis_output"
+    output_dir = BASE_DIR / "analysis_output"
     
     create_3panel_map(
         coastal_counties,

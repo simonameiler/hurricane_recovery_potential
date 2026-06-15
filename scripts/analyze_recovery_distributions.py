@@ -13,9 +13,11 @@ from pathlib import Path
 import json
 from scipy import stats
 
+BASE_DIR = Path(__file__).parent.parent
+
 # Load recovery data
 print("Loading recovery data...")
-recovery_dir = Path('../data/recovery_potential_per_scenario')
+recovery_dir = BASE_DIR / 'data' / 'recovery_potential_per_scenario'
 
 all_recovery_data = []
 for json_file in sorted(recovery_dir.glob('*.json')):
@@ -34,7 +36,7 @@ recovery_df = pd.DataFrame(all_recovery_data)
 
 # Load impact data
 print("Loading impact data...")
-impacts_dir = Path('../impacts_out/by_event/scaled')
+impacts_dir = BASE_DIR / 'impacts_out' / 'by_event' / 'scaled'
 
 all_impacts = []
 for csv_file in sorted(impacts_dir.glob('*.csv')):
@@ -249,11 +251,11 @@ ax6.grid(True, alpha=0.3, axis='x')
 ax6.legend(['P10-P90 range', 'Median', 'Maximum'], loc='best', fontsize=8)
 
 plt.tight_layout()
-plt.savefig('../analysis_output/recovery_distribution_analysis.png', dpi=300, bbox_inches='tight')
+plt.savefig(BASE_DIR / 'analysis_output' / 'recovery_distribution_analysis.png', dpi=300, bbox_inches='tight')
 print("Saved: recovery_distribution_analysis.png")
 
 # Save detailed metrics
-county_dist.to_csv('../analysis_output/county_distribution_metrics.csv', index=False)
+county_dist.to_csv(BASE_DIR / 'analysis_output' / 'county_distribution_metrics.csv', index=False)
 print("Saved: county_distribution_metrics.csv")
 
 # Identify interesting county patterns
