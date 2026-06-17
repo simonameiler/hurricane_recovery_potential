@@ -21,7 +21,7 @@ conda activate climada_env
 |------|-----------------|-------|
 | Gori TC wind-field `.mat` files | `climada_data/hazard/tropical_cyclone/gori/` | ~5018 events; Gori et al. (2025) |
 | Raw ACS/Census housing CSVs | `climada_data/exposure/building_inventory_NAcoast/` | one sub-dir per state |
-| pyrecodes per-event recovery JSONs | `data/recovery_potential_per_scenario/` | `{event_id}_scaled_recovery_potential.json` per event |
+| pyrecodes per-event recovery JSONs | `data/recovery_potential_per_scenario/` | `{event_id}_scaled_recovery_potential.json` per event — now generated locally by `scripts/run_pyrecodes_light.py` (Stage 6a) |
 
 Small reference tables already committed: `data/US_counties.shp`, `data/county_region.csv`,
 `data/selected_states_counties_with_permits.csv`, `data/external/NRI_Table_Counties.csv`,
@@ -114,7 +114,29 @@ python scripts/analyze_impacts.py
 python scripts/create_validation_figures.py
 ```
 
-### Stage 6 — Recovery (EARP)
+### Stage 6 — Recovery
+
+#### 6a — Per-event recovery simulation (*pyrecodes light*)
+
+Estimate each county's housing recovery time for every event. This is a
+lightweight (*pyrecodes light*) analytical stand-in for a full pyrecodes
+resource-constrained recovery simulation: recovery time =
+`max(longest damage-state repair time, housing repair demand / monthly
+construction capacity)`, where demand is the HAZUS unit-month repair demand
+summed over damage states and capacity comes from county building permits.
+
+```bash
+python scripts/run_pyrecodes_light.py
+# reads:  impacts_out/by_event/scaled/{event}_scaled.csv   (Stage 4)
+#         data/selected_states_counties_with_permits.csv   (committed)
+# → data/recovery_potential_per_scenario/{event}_scaled_recovery_potential.json
+```
+
+This step produces the per-event recovery JSONs that Stage 6b consumes (they
+were previously generated outside this repo). See the script docstring for the
+full method and the `--construction-capacity-modifier` option.
+
+#### 6b — Expected Annual Recovery Potential (EARP)
 
 ```bash
 python scripts/compute_recovery_potential.py
