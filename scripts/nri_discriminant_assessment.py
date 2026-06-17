@@ -32,11 +32,16 @@ Inputs (relative to repo root):
 
 Outputs (all written to analysis_output/):
   nri_county_merged.csv          one row per county, our metrics + NRI
+  nri_risk_comparison.csv        hazard layer: EAUA vs NRI hurricane/coastal-flood EAL
   nri_correlations.csv           Spearman: our metrics vs NRI (with Pearson-log too)
   nri_partial_correlations.csv   recovery/capacity vs SVI controlling for exposure
-  nri_priority_crosstab.csv      67 priority counties vs NRI resilience/SVI terciles
+  nri_priority_crosstab.csv      priority counties vs NRI resilience/SVI terciles
   divergent_counties_SI.csv      priority counties invisible to NRI indices
-  fig_mapB_risk_capacity_57.png  Map B regenerated on analysis sample
+  table_nri_evaluation.tex       combined SI table (hazard + recovery + partial corr)
+  table_divergent_counties.tex   SI table of divergent priority counties
+  fig_eaua_vs_nri_eal.png        SI scatter: EAUA vs NRI hurricane (wind) EAL
+  fig_recovery_nri_agreement_2x2.png  2x2 agreement maps (EARP/median-recovery x Resilience/SVI)
+  fig_recovery_resilience_agreement.png  single panel: median per-event recovery vs Resilience
   fig_capacity_vs_resilience.png
 """
 
@@ -53,11 +58,33 @@ import matplotlib.pyplot as plt
 HERE = Path(__file__).resolve().parent
 BASE_DIR = HERE.parent                                           # repo root
 
-PERMITS = BASE_DIR / "data" / "selected_states_counties_with_permits.csv"
-F_EARP = BASE_DIR / "analysis_output" / "earp_per_county.csv"
-F_DAMAGE = BASE_DIR / "analysis_output" / "county_event_frequency_damage_metrics.csv"
-SCEN_DIR = BASE_DIR / "data" / "recovery_potential_per_scenario"
-OUT_DIR = BASE_DIR / "analysis_output"
+
+def _pick(*candidates):
+    """Return the first candidate path that exists, else the first candidate.
+
+    Lets the script run unchanged from the repository layout (data/,
+    analysis_output/) and from a flat working folder where the same inputs sit
+    next to the script.
+    """
+    for c in candidates:
+        if Path(c).exists():
+            return Path(c)
+    return Path(candidates[0])
+
+
+PERMITS = _pick(BASE_DIR / "data" / "selected_states_counties_with_permits.csv",
+                HERE / "selected_states_counties_with_permits.csv")
+F_EARP = _pick(BASE_DIR / "analysis_output" / "earp_per_county.csv",
+               HERE / "NRI_GDB_CensusTracts" / "earp_per_county.csv")
+F_DAMAGE = _pick(BASE_DIR / "analysis_output" / "county_event_frequency_damage_metrics.csv",
+                 HERE / "NRI_GDB_CensusTracts" / "county_event_frequency_damage_metrics.csv")
+SCEN_DIR = _pick(BASE_DIR / "data" / "recovery_potential_per_scenario",
+                 HERE / "NRI_GDB_CensusTracts" / "recovery_potential_per_scenario")
+NRI_COUNTY = _pick(BASE_DIR / "data" / "external" / "NRI_Table_Counties.csv",
+                   HERE / "NRI_Table_Counties" / "NRI_Table_Counties.csv")
+COUNTIES_SHP = _pick(BASE_DIR / "data" / "US_counties.shp",
+                     HERE / "US_counties.shp")
+OUT_DIR = (BASE_DIR / "analysis_output") if (BASE_DIR / "analysis_output").exists() else HERE
 
 CAP_COL = "Average_Building_Permits(12 months)"
 REC_KEY = "recovery_potential [months]"
@@ -87,17 +114,23 @@ def load_per_event_median():
 
 
 def load_nri_county():
-    """Official FEMA NRI county table (no tract aggregation)."""
-    f = BASE_DIR / "data" / "external" / "NRI_Table_Counties.csv"
-    df = pd.read_csv(f, dtype={"STCOFIPS": str})
+    """Official FEMA NRI county table (no tract aggregation).
+
+    HRCN_EALT is the Hurricane peril expected annual loss (essentially wind);
+    CFLD_EALT is the separate Coastal Flooding peril EAL (storm surge). We load
+    both so the hazard comparison can be checked against a wind-plus-surge match.
+    """
+    df = pd.read_csv(NRI_COUNTY, dtype={"STCOFIPS": str})
     df["fips"] = df["STCOFIPS"].str.zfill(5)
-    for c in ["RESL_SCORE", "SOVI_SCORE", "HRCN_EALT", "POPULATION"]:
+    for c in ["RESL_SCORE", "SOVI_SCORE", "HRCN_EALT", "CFLD_EALT", "POPULATION"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df.rename(columns={"RESL_SCORE": "nri_resilience",
                               "SOVI_SCORE": "nri_social_vuln",
                               "HRCN_EALT": "nri_hurricane_eal",
+                              "CFLD_EALT": "nri_coastal_flood_eal",
                               "POPULATION": "nri_population"})[
-        ["fips", "nri_population", "nri_resilience", "nri_social_vuln", "nri_hurricane_eal"]]
+        ["fips", "nri_population", "nri_resilience", "nri_social_vuln",
+         "nri_hurricane_eal", "nri_coastal_flood_eal"]]
 
 
 def load_inputs():
@@ -128,6 +161,108 @@ def partial_spearman(df, x, y, z):
     return r, p, len(sub)
 
 
+def _tex_signed(x, dagger=False):
+    """Format a correlation with a LaTeX-safe minus and an optional dagger mark."""
+    if pd.isna(x):
+        return "--"
+    s = ("$-$" if x < 0 else "+") + f"{abs(x):.2f}"
+    return s + (r"$^{\dagger}$" if dagger else "")
+
+
+def write_latex_tables(out_dir, risk, corr, partial, si, n_sample):
+    """Write the two SI tables: combined NRI evaluation, and divergent counties."""
+    cset = corr.set_index(["our_metric", "nri_metric"])
+    rrow = {r["comparison"]: r for _, r in risk.iterrows()}
+    pset = partial.set_index("our_metric")
+
+    nri_cols = ["Community Resilience", "Social Vulnerability", "Hurricane EAL (exposure)"]
+    rec_rows = [("Construction capacity", "capacity"),
+                ("EARP (annual recovery potential)", "EARP (annual recovery potential)"),
+                ("Median per-event recovery potential", "median per-event recovery potential")]
+
+    L = [r"\begin{table}[htb!]", r"\centering",
+         (r"\caption{Evaluation of the recovery-potential model against the FEMA National "
+          r"Risk Index (NRI), over the analysis sample of " + str(n_sample) + r" US "
+          r"Atlantic-coast counties with positive modelled risk, recovery potential and "
+          r"construction capacity. Panel~A compares the modelled hazard layer (expected "
+          r"annual units affected, EAUA) with the NRI's independent, historically "
+          r"calibrated monetary risk. Panel~B reports rank correlations between the "
+          r"model's quantities and the NRI socio-economic layers (convergent and "
+          r"discriminant validity). Panel~C re-estimates the association with Social "
+          r"Vulnerability after controlling for exposure. Entries are Spearman rank "
+          r"coefficients; Panel~A also gives Pearson coefficients on "
+          r"$\log_{10}$-transformed values. All coefficients are significant at $p<0.01$ "
+          r"unless marked.}"),
+         r"\label{tab:nri_evaluation}",
+         r"\begin{tabular}{lrrr}", r"\hline",
+         (r"\multicolumn{4}{l}{\textit{Panel A. Hazard layer: modelled physical risk vs "
+          r"independent monetary risk}}\\"),
+         r" & Spearman & Pearson (log) & $n$ \\", r"\hline"]
+    for key in ["EAUA vs NRI hurricane (wind) EAL", "EAUA vs NRI coastal-flood EAL",
+                "EAUA vs NRI wind + coastal-flood EAL"]:
+        r = rrow[key]
+        L.append(f"{key} & {_tex_signed(r['spearman_r'])} & "
+                 f"{_tex_signed(r['pearson_log_r'])} & {int(r['n'])} \\\\")
+    L += [r"\hline",
+          (r"\multicolumn{4}{l}{\textit{Panel B. Recovery layer vs NRI socio-economic "
+           r"indices (Spearman $r$)}}\\"),
+          r" & Community & Social & Hurricane \\",
+          r" & Resilience & Vulnerability & EAL (exposure) \\", r"\hline"]
+    for disp, key in rec_rows:
+        vals = [_tex_signed(cset.loc[(key, n), "spearman_r"],
+                            dagger=float(cset.loc[(key, n), "p"]) > 0.05) for n in nri_cols]
+        L.append(f"{disp} & " + " & ".join(vals) + r" \\")
+    L += [r"\hline",
+          (r"\multicolumn{4}{l}{\textit{Panel C. Association with Social Vulnerability, "
+           r"controlling for exposure (Spearman $r$)}}\\"),
+          r" & raw & partial & partial \\",
+          r" & & (control EAUA) & (control wind EAL) \\", r"\hline"]
+    for disp, key in [("Construction capacity", "capacity"),
+                      ("Median per-event recovery potential", "median per-event recovery")]:
+        p = pset.loc[key]
+        L.append(f"{disp} & {_tex_signed(p['spearman_raw'])} & "
+                 f"{_tex_signed(p['partial_given_EAUA'])} & "
+                 f"{_tex_signed(p['partial_given_hurricaneEAL'])} \\\\")
+    L += [r"\hline", r"\end{tabular}", r"\\[2pt]",
+          (r"{\footnotesize $^{\dagger}$ Not significant ($p>0.05$): per-event recovery "
+           r"potential is statistically independent of hazard exposure, unlike the annual "
+           r"metric.}"),
+          r"\end{table}"]
+    (out_dir / "table_nri_evaluation.tex").write_text("\n".join(L) + "\n")
+
+    D = [r"\begin{table}[htb!]", r"\centering",
+         (r"\caption{Priority counties that socio-economic screening would miss. A "
+          r"priority county is one ranked in both the highest tercile of expected "
+          r"tropical cyclone (TC) damage and the lowest tercile of construction capacity "
+          r"across the analysis sample ($n = 685$ counties); these are places where high "
+          r"storm risk coincides with a thin local rebuilding sector. A county is "
+          r"considered flagged by a socio-economic index when it falls in that index's "
+          r"most concerning tercile, that is, the highest tercile of the FEMA National "
+          r"Risk Index (NRI) Social Vulnerability score (SVI) or the lowest tercile of "
+          r"the NRI Community Resilience score (Resil.). The 13 counties listed are "
+          r"priority counties in neither of those terciles, so a screen built on either "
+          r"NRI index would overlook them; they are the counties where the "
+          r"building-permit capacity screen adds information beyond socio-economic "
+          r"indicators. Counties are sorted by number of housing units. Pop.\ \% of "
+          r"state is the percentage of the state population living in the county. Permits "
+          r"per month is the construction-capacity proxy (average monthly building "
+          r"permits), and permits per 1000 units normalises it by housing stock (sample "
+          r"median 0.046). NRI SVI and Community Resilience are county percentile scores "
+          r"from 0 to 100; a higher SVI indicates greater social vulnerability and a "
+          r"higher Resilience score indicates greater resilience.}"),
+         r"\label{tab:divergent_counties}",
+         r"\begin{tabular}{llrrrrrr}", r"\hline",
+         r"County & State & Housing & Pop.\ \% & Permits & Permits per & NRI & NRI \\",
+         r" & & units & of state & per month & 1000 units & SVI & Resil. \\", r"\hline"]
+    for _, r in si.iterrows():
+        D.append(f"{r['county']} & {r['state']} & {int(round(r['housing_units'])):,} & "
+                 f"{r['pop_pct_of_state']:.2f} & {r['permits_per_month']:.2f} & "
+                 f"{r['permits_per_1000_units']:.3f} & {int(round(r['nri_social_vuln']))} & "
+                 f"{int(round(r['nri_resilience']))} \\\\")
+    D += [r"\hline", r"\end{tabular}", r"\end{table}"]
+    (out_dir / "table_divergent_counties.tex").write_text("\n".join(D) + "\n")
+
+
 def main():
     print("Loading raw pyrecodes per-event recovery ...")
     per_event = load_per_event_median()
@@ -152,6 +287,34 @@ def main():
     OUT_DIR.mkdir(exist_ok=True)
     m.to_csv(OUT_DIR / "nri_county_merged.csv", index=False)
     print(f"\nAnalysis sample: {len(s)} counties | priority (EAUA t3 x CC t1): {int(s['priority'].sum())}")
+
+    # ---- HAZARD LAYER: modelled physical risk vs independent monetary risk ----
+    # Our EAUA (expected annual units affected, units/yr) is a physical risk metric;
+    # the NRI hurricane EAL is a historically calibrated monetary risk ($) built from
+    # entirely separate inputs. Agreement corroborates the hazard layer without sharing
+    # data. NRI books storm surge under a separate Coastal Flooding peril, so we also
+    # report EAUA against coastal-flood EAL and against wind+coastal-flood as a
+    # peril-matching robustness check.
+    def corr_pair(x, y):
+        d = s[[x, y]].replace([np.inf, -np.inf], np.nan)
+        d = d[(d[x] > 0) & (d[y] > 0)].dropna()
+        sp, sp_p = spearmanr(d[x], d[y])
+        pe = pearsonr(np.log10(d[x]), np.log10(d[y]))[0]
+        return sp, pe, sp_p, len(d)
+
+    s["nri_wind_plus_cflood_eal"] = s[["nri_hurricane_eal", "nri_coastal_flood_eal"]].sum(
+        axis=1, min_count=1)
+    risk_rows = []
+    for yc, yl in [("nri_hurricane_eal", "NRI hurricane (wind) EAL"),
+                   ("nri_coastal_flood_eal", "NRI coastal-flood EAL"),
+                   ("nri_wind_plus_cflood_eal", "NRI wind + coastal-flood EAL")]:
+        sp, pe, sp_p, n = corr_pair("eaua", yc)
+        risk_rows.append({"comparison": f"EAUA vs {yl}", "spearman_r": round(sp, 3),
+                          "pearson_log_r": round(pe, 3), "p": f"{sp_p:.1e}", "n": n})
+    risk = pd.DataFrame(risk_rows)
+    risk.to_csv(OUT_DIR / "nri_risk_comparison.csv", index=False)
+    print("\nHazard layer (EAUA vs NRI EAL):")
+    print(risk.to_string(index=False))
 
     # internal consistency (both statistics, for the record)
     print("\nInternal consistency (analysis sample):")
@@ -239,33 +402,108 @@ def main():
     print(f"  median permits/1000 units: {div['permits_per_1000units'].median():.3f} "
           f"(study median {(s['construction_capacity']/s['total_units']*1000).median():.3f})")
 
-    # ---- regenerate bivariate Map B (Risk x Capacity) at the 57-county definition ----
-    GRID_B = [["#e8e8e8", "#ace4e4", "#5ac8c8"],
-              ["#b8d6be", "#90b2b3", "#567994"],
-              ["#73ae80", "#5a9178", "#2a5a5b"]]
+    # ---- SI tables (combined NRI evaluation + divergent counties) ----
+    write_latex_tables(OUT_DIR, risk, corr, partial, si, len(s))
+    print("\nWrote SI tables: table_nri_evaluation.tex, table_divergent_counties.tex")
+
+    # ---- SI figure: EAUA vs NRI hurricane (wind) EAL ----
+    dfr = s[["NAME", "STATE_NAME", "eaua", "nri_hurricane_eal"]].copy()
+    dfr = dfr[(dfr["eaua"] > 0) & (dfr["nri_hurricane_eal"] > 0)].dropna()
+    dfr["gap"] = dfr["eaua"].rank(pct=True) - dfr["nri_hurricane_eal"].rank(pct=True)
+    figr, axr = plt.subplots(figsize=(6.5, 6))
+    axr.scatter(dfr["nri_hurricane_eal"], dfr["eaua"], s=14, c="#9ecae1",
+                edgecolor="none", alpha=0.7)
+    label = pd.concat([dfr.nlargest(4, "gap"), dfr.nsmallest(4, "gap")])
+    axr.scatter(label["nri_hurricane_eal"], label["eaua"], s=24, c="#d7191c", edgecolor="none")
+    for _, r in label.iterrows():
+        axr.annotate(r["NAME"], (r["nri_hurricane_eal"], r["eaua"]), fontsize=7,
+                     xytext=(3, 3), textcoords="offset points", color="#d7191c")
+    axr.set_xscale("log"); axr.set_yscale("log")
+    axr.set_xlabel("NRI hurricane (wind) expected annual loss (USD)")
+    axr.set_ylabel("EAUA (expected annual units affected, units/yr)")
+    rho = spearmanr(dfr["eaua"], dfr["nri_hurricane_eal"])[0]
+    axr.set_title(f"Modelled physical risk vs NRI monetary risk "
+                  f"(Spearman $r={rho:+.2f}$, $n={len(dfr)}$)", fontsize=9)
+    figr.tight_layout()
+    figr.savefig(OUT_DIR / "fig_eaua_vs_nri_eal.png", dpi=200, bbox_inches="tight")
+
+    # ---- SI figure: 2x2 agreement maps, recovery potential vs NRI socio-economic indices ----
+    # Both quantities are oriented as "expected recovery difficulty" via within-sample
+    # percentile ranks (n = analysis sample). The mapped value is the recovery-difficulty
+    # rank minus the NRI-difficulty rank: red (positive) = our recovery metric flags the
+    # county as harder to recover than the NRI score does (physical-capacity blind spots);
+    # blue (negative) = the NRI score flags greater difficulty (more vulnerable / less
+    # resilient) than our recovery does; white = the two agree.
     COASTAL = ['01', '09', '10', '12', '13', '22', '23', '24', '25', '28',
                '33', '34', '36', '37', '42', '44', '45', '48', '51']
-    cty = gpd.read_file(BASE_DIR / "data" / "US_counties.shp")
-    cty["fips"] = (cty["STATEFP"] + cty["COUNTYFP"]).str.zfill(5)
-    cty = cty[cty["STATEFP"].isin(COASTAL)].merge(
-        s[["fips", "eaua_t", "cc_t", "priority", "divergent"]], on="fips", how="left")
+    geo = gpd.read_file(COUNTIES_SHP)
+    geo["fips"] = (geo["STATEFP"] + geo["COUNTYFP"]).str.zfill(5)
+    geo = geo[geo["STATEFP"].isin(COASTAL)].copy()
 
-    def color_b(r):
-        if pd.isna(r["eaua_t"]) or pd.isna(r["cc_t"]):
-            return "#d9d9d9"
-        return GRID_B[int(4 - r["cc_t"]) - 1][int(r["eaua_t"]) - 1]
-    cty["c"] = cty.apply(color_b, axis=1)
+    def rank_pct(col, higher_is_harder=True):
+        r = s[col].replace([np.inf, -np.inf], np.nan).rank(pct=True)
+        return r if higher_is_harder else (1.0 - r)
 
-    figm, axm = plt.subplots(figsize=(9, 6))
-    cty.plot(ax=axm, color=cty["c"], edgecolor="#aaaaaa", linewidth=0.15)
-    dv = cty[cty["divergent"] == True]
-    if len(dv):
-        dv.plot(ax=axm, facecolor="none", edgecolor="#d7191c", linewidth=1.3)
-    axm.set_xlim(-107, -65); axm.set_ylim(24, 48); axm.set_aspect("equal"); axm.axis("off")
-    axm.set_title("Map B: TC risk (EAUA) x construction capacity, joint-sample terciles\n"
-                  "red outline = priority county invisible to NRI SVI/Resilience", fontsize=10)
-    figm.tight_layout()
-    figm.savefig(OUT_DIR / "fig_mapB_risk_capacity_57.png", dpi=200, bbox_inches="tight")
+    # recovery metrics: higher value = slower recovery = harder
+    s["rk_earp"] = rank_pct("earp_months_per_year")
+    s["rk_medrec"] = rank_pct("median_recovery_per_event")
+    # NRI: higher SVI = harder; lower Resilience = harder
+    s["rk_svi"] = rank_pct("nri_social_vuln", higher_is_harder=True)
+    s["rk_resl"] = rank_pct("nri_resilience", higher_is_harder=False)
+
+    rec_rows = [("rk_earp", "earp_months_per_year", "EARP (annual recovery potential)"),
+                ("rk_medrec", "median_recovery_per_event", "Median per-event recovery potential")]
+    nri_cols2 = [("rk_resl", "Community Resilience"),
+                 ("rk_svi", "Social Vulnerability")]
+
+    cmap = plt.cm.RdBu_r
+    norm = plt.Normalize(vmin=-1, vmax=1)
+    fig2, axes = plt.subplots(2, 2, figsize=(11, 8.2))
+    for i, (rk_rec, _, rec_lbl) in enumerate(rec_rows):
+        for j, (rk_nri, nri_lbl) in enumerate(nri_cols2):
+            ax = axes[i][j]
+            s["agree"] = s[rk_rec] - s[rk_nri]
+            g = geo.merge(s[["fips", "agree"]], on="fips", how="left")
+            g.plot(ax=ax, color="#e9e9e9", edgecolor="#cccccc", linewidth=0.1)   # base / off-sample
+            gv = g[g["agree"].notna()]
+            gv.plot(ax=ax, column="agree", cmap=cmap, norm=norm,
+                    edgecolor="#888888", linewidth=0.1)
+            ax.set_xlim(-107, -65); ax.set_ylim(24, 48); ax.set_aspect("equal"); ax.axis("off")
+            rho = spearmanr(s[rk_rec], s[rk_nri], nan_policy="omit")[0]
+            ax.set_title(f"{rec_lbl}\nvs NRI {nri_lbl}  (agreement $r={rho:+.2f}$)", fontsize=9)
+    fig2.subplots_adjust(left=0.02, right=0.88, top=0.90, bottom=0.04, wspace=0.04, hspace=0.14)
+    cax = fig2.add_axes([0.90, 0.22, 0.016, 0.56])
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm); sm.set_array([])
+    cb = fig2.colorbar(sm, cax=cax)
+    cb.set_label("recovery-difficulty rank  $-$  NRI-difficulty rank\n"
+                 "red: model flags worse        blue: NRI flags worse", fontsize=8)
+    fig2.suptitle("Agreement between modelled recovery potential and FEMA NRI "
+                  "socio-economic indices\n(within-sample percentile ranks, both oriented "
+                  "as expected recovery difficulty)", fontsize=11)
+    fig2.savefig(OUT_DIR / "fig_recovery_nri_agreement_2x2.png", dpi=200, bbox_inches="tight")
+
+    # ---- SI figure: single panel, median per-event recovery vs NRI Community Resilience ----
+    # Same rank-difference construction as the 2x2; the 13 divergent priority counties
+    # (Table tab:divergent_counties) are outlined in black.
+    s["agree_mr_resl"] = s["rk_medrec"] - s["rk_resl"]
+    g1 = geo.merge(s[["fips", "agree_mr_resl", "divergent"]], on="fips", how="left")
+    fig1, ax1 = plt.subplots(figsize=(7.5, 6))
+    g1.plot(ax=ax1, color="#e9e9e9", edgecolor="#cccccc", linewidth=0.1)   # base / off-sample
+    g1[g1["agree_mr_resl"].notna()].plot(ax=ax1, column="agree_mr_resl", cmap=cmap, norm=norm,
+                                         edgecolor="#888888", linewidth=0.1)
+    dvg = g1[g1["divergent"] == True]
+    if len(dvg):
+        dvg.plot(ax=ax1, facecolor="none", edgecolor="black", linewidth=1.1)
+    ax1.set_xlim(-107, -65); ax1.set_ylim(24, 48); ax1.set_aspect("equal"); ax1.axis("off")
+    cax1 = fig1.add_axes([0.84, 0.24, 0.018, 0.52])
+    sm1 = plt.cm.ScalarMappable(cmap=cmap, norm=norm); sm1.set_array([])
+    cb1 = fig1.colorbar(sm1, cax=cax1)
+    cb1.set_label("recovery-difficulty rank  $-$  resilience-difficulty rank", fontsize=8)
+    cb1.ax.text(0.5, 1.03, "red: model flags worse", transform=cb1.ax.transAxes,
+                fontsize=8, ha="center", va="bottom")
+    cb1.ax.text(0.5, -0.03, "blue: NRI flags worse", transform=cb1.ax.transAxes,
+                fontsize=8, ha="center", va="top")
+    fig1.savefig(OUT_DIR / "fig_recovery_resilience_agreement.png", dpi=200, bbox_inches="tight")
 
     # ---- figure ----
     fig, ax = plt.subplots(figsize=(7, 5.5))

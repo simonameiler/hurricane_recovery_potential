@@ -41,7 +41,8 @@ m.to_csv(OUT_CSV, index=False)
 print(f"wrote {OUT_CSV}  ({len(m)} county-event rows)")
 
 print("\n--- totals (surge off -> on) ---")
-for k in (2, 3, 4):                       # DS2-4 drive recovery demand
+# DS1-DS4 all feed EAUA and the recovery demand (repair-time weights 1,1,3,<DS4>).
+for k in (1, 2, 3, 4):
     o = m[f"units_DS{k}_scaled_off"].sum(); n = m[f"units_DS{k}_scaled_on"].sum()
     print(f"DS{k}: off={o:,.0f}  on={n:,.0f}  change={100*(n-o)/o if o else 0:+.3f}%")
 
@@ -49,7 +50,7 @@ changed = m[(m[[f"dDS{k}" for k in (1, 2, 3, 4)]].abs() > 1e-9).any(axis=1)]
 print(f"\ncounty-event pairs changed: {len(changed)} / {len(m)} ({100*len(changed)/len(m):.3f}%)")
 print(f"counties affected: {changed['fips'].nunique() if len(changed) else 0}")
 if len(changed):
-    top = (changed.assign(absshift=changed[[f'dDS{k}' for k in (2, 3, 4)]].abs().sum(axis=1))
+    top = (changed.assign(absshift=changed[[f'dDS{k}' for k in (1, 2, 3, 4)]].abs().sum(axis=1))
                   .groupby('fips')['absshift'].sum().sort_values(ascending=False).head(15))
-    print("\ntop 15 counties by DS2-4 unit shift:")
+    print("\ntop 15 counties by DS1-4 unit shift:")
     print(top.to_string())

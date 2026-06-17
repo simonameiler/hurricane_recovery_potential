@@ -51,8 +51,8 @@ impacts_df['fips'] = impacts_df['fips'].astype(str).str.zfill(5)
 impacts_df['weighted_damage'] = (
     impacts_df['units_DS1_scaled'] * 1 + 
     impacts_df['units_DS2_scaled'] * 1 + 
-    impacts_df['units_DS3_scaled'] * 3 + 
-    impacts_df['units_DS4_scaled'] * 4
+    impacts_df['units_DS3_scaled'] * 3 +
+    impacts_df['units_DS4_scaled'] * 6
 )
 
 # Merge recovery and impacts
