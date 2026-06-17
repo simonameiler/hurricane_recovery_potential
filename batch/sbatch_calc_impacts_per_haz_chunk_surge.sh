@@ -10,6 +10,7 @@
 #SBATCH --job-name=calc_impacts_chunk_surge
 #SBATCH --output=logs/calc_impacts_chunk_surge_%A_%a.out
 #SBATCH --error=logs/calc_impacts_chunk_surge_%A_%a.err
+#SBATCH --partition=serc
 #SBATCH --time=08:00:00
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=48G
