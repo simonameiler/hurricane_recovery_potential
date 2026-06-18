@@ -12,7 +12,7 @@ from scipy import sparse
 from scipy.interpolate import RegularGridInterpolator, griddata
 from scipy.io import loadmat, whosmat
 from pathlib import Path
-from typing import Iterable, Optional, Tuple
+from typing import Optional, Tuple
 
 # import CLIMADA modules:
 from climada.hazard import Centroids, Hazard
@@ -106,14 +106,13 @@ def export_state_and_county_results_all_events(
     imp,
     scaling_npz_path,
     county_region_path=None,
-    out_dir="./impacts_out",
+    out_dir="./data/impact",
     k: float = 1.0,
     scale_mode: str = "compound",
     lower_threshold: float = 0.005,
-    write_per_building: bool = False,
 ):
     """
-    Produce per-state per-building CSVs (all events) and a county-event aggregated CSV.
+    Produce county-event aggregated CSVs (per_event/) for all events.
 
     Parameters
     ----------
@@ -121,14 +120,9 @@ def export_state_and_county_results_all_events(
     scaling_npz_path: path to NPZ with Scaling and county_index
     county_region_path: optional mapping CSV for county_index -> stcode/ccode or fips
     out_dir: output directory
-    k, scale_mode: scaling options (see attach_and_aggregate_scaled_impacts)
-    write_per_building: if True, write per-building CSVs (default False to save disk space)
+    k, scale_mode: scaling options
     """
     os.makedirs(out_dir, exist_ok=True)
-    per_state_dir = Path(out_dir) / "per_state"
-    per_state_dir.mkdir(parents=True, exist_ok=True)
-    agg_state_dir = Path(out_dir) / "per_state_aggregated"
-    agg_state_dir.mkdir(parents=True, exist_ok=True)
     per_event_dir = Path(out_dir) / "per_event"
     per_event_dir.mkdir(parents=True, exist_ok=True)
 
@@ -246,20 +240,6 @@ def export_state_and_county_results_all_events(
         full_all.loc[affected_idx, scaled_col] = scaled_vals
         full_all.loc[affected_idx, repair_scaled_col] = scaled_vals * full_all.loc[affected_idx, "ReplacementCost"]
 
-        # write per-state per-event all_buildings files (only if requested)
-        if write_per_building:
-            keep_cols = ["id", "fips", "stcode", "ccode", raw_col, scaled_col, repair_raw_col, repair_scaled_col, "NumberOfUnits"]
-            keep_cols = [c for c in keep_cols if c in full_all.columns]
-            if "stcode" in full_all.columns:
-                for st in full_all["stcode"].dropna().unique():
-                    subset = full_all[full_all["stcode"] == st]
-                    out_name = f"all_buildings_{str(st)}_{ev_name}.csv"
-                    out_path = per_state_dir / out_name
-                    subset[keep_cols].to_csv(out_path, index=False)
-            else:
-                out_path = per_state_dir / f"all_buildings_all_{ev_name}.csv"
-                full_all[keep_cols].to_csv(out_path, index=False)
-
         # aggregation per county for this event
         aff = pd.DataFrame({
             "stcode": full_all.loc[affected_idx, "stcode"].values,
@@ -321,176 +301,6 @@ def export_state_and_county_results_all_events(
                 per_event_path = per_event_dir / f"aggregated_all_{ev_name}.csv"
                 agg_event_df.to_csv(per_event_path, index=False)
 
-    # Note: per-state combined full-building CSVs (state_{st}_buildings_all_events.csv)
-    # were intentionally removed to avoid producing large duplicated outputs.
-
-    # write aggregated CSV (all states/counties x events)
     if agg_rows:
-        agg_all = pd.DataFrame(agg_rows)
-        # write per-state combined aggregated files including stcode in filename
-        if 'stcode' in agg_all.columns:
-            for st in agg_all['stcode'].dropna().unique():
-                subset = agg_all[agg_all['stcode'] == st]
-                out_name = f"aggregated_{str(st)}_all_events_county.csv"
-                subset.to_csv(agg_state_dir / out_name, index=False)
-        else:
-            agg_all.to_csv(agg_state_dir / "aggregated_all_events_county.csv", index=False)
-        return full_all, agg_all
-
+        return full_all, pd.DataFrame(agg_rows)
     return full_all, None
-
-
-def combine_aggregated_outputs_to_per_event(
-    base_out_dir: str = "./impacts_out",
-    source_subdirs: Optional[Iterable[str]] = None,
-    dest_subdir: str = "by_event",
-    raw_dir_name: str = "raw",
-    scaled_dir_name: str = "scaled",
-    verbose: bool = True,
-):
-    """
-    Combine existing aggregated CSV outputs (from `per_event` and/or `per_state_aggregated`) into
-    one output CSV per event, split into raw and scaled directories.
-
-    Behavior and expectations:
-    - Looks for CSV files under `base_out_dir/<subdir>` for each subdir in `source_subdirs`.
-    - Expects aggregated CSVs to contain an `event_name` column (preferred). If missing, the
-      function will try to infer the event name from filenames of the form
-      `aggregated_{stcode}_{ev_name}.csv` by taking the part after the first underscore.
-    - Produces two folders under `base_out_dir/<dest_subdir>`: `raw/` and `scaled/`.
-    - For each event, writes two CSVs named `<sanitized_event_name>_raw.csv` and
-      `<sanitized_event_name>_scaled.csv` containing the `_raw` and `_scaled` columns
-      respectively. Both files always include `event_name`, `stcode`, `ccode`, `fips`.
-
-    Parameters
-    ----------
-    base_out_dir:
-        Base output directory where `per_event` and `per_state_aggregated` live (default './impacts_out').
-    source_subdirs:
-        Iterable of subdirectory names to search for aggregated CSVs (defaults to ['per_event','per_state_aggregated']).
-    dest_subdir:
-        Subdirectory under `base_out_dir` to write per-event outputs (default 'by_event').
-    raw_dir_name, scaled_dir_name:
-        Names for the two output folders under the destination directory.
-    verbose:
-        If True, prints progress messages.
-
-    Returns
-    -------
-    dict
-        Mapping 'raw'->list_of_paths, 'scaled'->list_of_paths of files written.
-    """
-    base = Path(base_out_dir)
-
-    if source_subdirs is None:
-        # Prefer using per-event CSVs. If none are available, fall back to per_state_aggregated.
-        per_event_dir = base / "per_event"
-        per_state_dir = base / "per_state_aggregated"
-        pe_files = list(per_event_dir.glob("*.csv")) if per_event_dir.exists() else []
-        ps_files = list(per_state_dir.glob("*.csv")) if per_state_dir.exists() else []
-        if pe_files:
-            source_subdirs = ["per_event"]
-            if verbose:
-                print("Using 'per_event' CSVs as source.")
-        elif ps_files:
-            source_subdirs = ["per_state_aggregated"]
-            if verbose:
-                print("'per_event' not found; falling back to 'per_state_aggregated'.")
-        else:
-            # neither directory contains CSVs; keep default search order so the function
-            # will report no files found.
-            source_subdirs = ["per_event", "per_state_aggregated"]
-            if verbose:
-                print("No per_event or per_state_aggregated CSVs found; will search both locations.")
-
-    base = Path(base_out_dir)
-    dest = base / dest_subdir
-    raw_out = dest / raw_dir_name
-    scaled_out = dest / scaled_dir_name
-    raw_out.mkdir(parents=True, exist_ok=True)
-    scaled_out.mkdir(parents=True, exist_ok=True)
-
-    # gather all CSV files from the source subdirectories
-    csv_paths = []
-    for sd in source_subdirs:
-        d = base / sd
-        if not d.exists():
-            if verbose:
-                print(f"source directory not found, skipping: {d}")
-            continue
-        for p in d.glob("*.csv"):
-            csv_paths.append(p)
-
-    if not csv_paths:
-        if verbose:
-            print("No aggregated CSV files found in source directories. Nothing to combine.")
-        return {"raw": [], "scaled": []}
-
-    # read and concatenate all CSVs into a single DataFrame, preserving event_name when present
-    all_rows = []
-    for p in csv_paths:
-        try:
-            df = pd.read_csv(p)
-        except Exception as e:
-            if verbose:
-                print(f"Failed to read {p}: {e}")
-            continue
-        # ensure event_name exists; if not, try to infer from filename
-        if "event_name" not in df.columns:
-            ev_guess = infer_event_name_from_filename(p)
-            df["event_name"] = ev_guess
-            if verbose:
-                print(f"Inferred event_name='{ev_guess}' for file {p.name}")
-        # drop event_index if present
-        if "event_index" in df.columns:
-            df = df.drop(columns=["event_index"])
-        all_rows.append(df)
-
-    if not all_rows:
-        if verbose:
-            print("No readable aggregated CSVs found.")
-        return {"raw": [], "scaled": []}
-
-    combined = pd.concat(all_rows, ignore_index=True, sort=False)
-
-    # use top-level sanitize_event_name helper for filenames
-
-    written = {"raw": [], "scaled": []}
-
-    for ev in combined["event_name"].unique():
-        ev_df = combined[combined["event_name"] == ev].copy()
-        # determine raw and scaled columns
-        raw_cols = [c for c in ev_df.columns if c.endswith("_raw")]
-        scaled_cols = [c for c in ev_df.columns if c.endswith("_scaled")]
-        # required id columns
-        id_cols = [c for c in ["event_name", "stcode", "ccode", "fips"] if c in ev_df.columns]
-
-        # prepare raw output
-        if raw_cols:
-            out_cols = id_cols + raw_cols
-            out_df = ev_df.loc[:, out_cols].copy()
-            out_name = f"{sanitize_event_name(ev)}_raw.csv"
-            out_path = raw_out / out_name
-            out_df.to_csv(out_path, index=False)
-            written["raw"].append(out_path)
-            if verbose:
-                print(f"Wrote raw per-event file: {out_path}")
-        else:
-            if verbose:
-                print(f"No raw columns found for event '{ev}', skipping raw file.")
-
-        # prepare scaled output
-        if scaled_cols:
-            out_cols = id_cols + scaled_cols
-            out_df = ev_df.loc[:, out_cols].copy()
-            out_name = f"{sanitize_event_name(ev)}_scaled.csv"
-            out_path = scaled_out / out_name
-            out_df.to_csv(out_path, index=False)
-            written["scaled"].append(out_path)
-            if verbose:
-                print(f"Wrote scaled per-event file: {out_path}")
-        else:
-            if verbose:
-                print(f"No scaled columns found for event '{ev}', skipping scaled file.")
-
-    return written

@@ -27,7 +27,6 @@ To generate only specific figures:
 """
 
 import argparse
-import json
 import warnings
 from pathlib import Path
 
@@ -454,14 +453,12 @@ def load_single_event(event_id):
     event_id = str(event_id)
     print(f"  Loading event {event_id} …")
 
-    impact_file = (
-        BASE_DIR / "impacts_out" / "by_event" / "scaled"
-        / f"{event_id}_scaled.csv"
-    )
-    if not impact_file.exists():
-        raise FileNotFoundError(f"Impact file not found: {impact_file}")
+    # per_event has one file per state per event; gather all files for this event
+    impact_files = sorted((DATA_DIR / "impact" / "per_event").glob(f"aggregated_*_{event_id}.csv"))
+    if not impact_files:
+        raise FileNotFoundError(f"No per_event files found for event {event_id}")
 
-    impact_df = pd.read_csv(impact_file)
+    impact_df = pd.concat([pd.read_csv(f) for f in impact_files], ignore_index=True)
     impact_df["fips"] = impact_df["fips"].astype(str).str.zfill(5)
     impact_df["weighted_damage"] = (
         impact_df["units_DS1_scaled"] * RECOVERY_WEIGHTS["DS1"]
@@ -470,28 +467,17 @@ def load_single_event(event_id):
         + impact_df["units_DS4_scaled"] * RECOVERY_WEIGHTS["DS4"]
     )
 
-    rec_file = (
-        DATA_DIR / "recovery_potential_per_scenario"
-        / f"{event_id}_scaled_recovery_potential.json"
-    )
-    if not rec_file.exists():
-        raise FileNotFoundError(f"Recovery file not found: {rec_file}")
-
-    with open(rec_file) as fh:
-        rec_data = json.load(fh)
-
-    rec_rows = []
-    for r in rec_data:
-        val = r.get("recovery_potential [months]", np.nan)
-        rec_rows.append({
-            "fips": str(r["fips"]).zfill(5),
-            "cc": float(r.get("reconstruction_capacity", np.nan)),
-            "recovery_months": np.nan if not np.isfinite(float(val)) else float(val),
-        })
-    rec_df = pd.DataFrame(rec_rows)
+    rec_df = pd.read_csv(DATA_DIR / "recovery" / "recovery_potential.csv", dtype={"fips": str})
+    rec_df = rec_df[rec_df["event_name"].astype(str) == event_id].copy()
+    rec_df["fips"] = rec_df["fips"].astype(str).str.zfill(5)
+    rec_df = rec_df.rename(columns={
+        "reconstruction_capacity": "cc",
+        "recovery_potential_months": "recovery_months",
+    })
+    rec_df["recovery_months"] = pd.to_numeric(rec_df["recovery_months"], errors="coerce")
 
     merged = impact_df[["fips", "weighted_damage"]].merge(
-        rec_df, on="fips", how="outer"
+        rec_df[["fips", "cc", "recovery_months"]], on="fips", how="outer"
     )
     n_aff = int((merged["weighted_damage"] > 0).sum())
     print(f"    {n_aff} counties with positive damage")

@@ -13,8 +13,10 @@ reports/
 impacts_out/
 data/exposure/
 data/hazard/
+data/impact/
+data/recovery/
 data/recovery_potential/
-data/external/
+data/NRI_Table_Counties.csv 
 
 # Cluster / SLURM artifacts
 slurm-*.out

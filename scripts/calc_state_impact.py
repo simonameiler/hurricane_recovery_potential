@@ -21,26 +21,24 @@ data_dir_default = Path('/home/groups/bakerjw/smeiler/climada_data/data')
 haz_rel_path = Path('hazard') / 'tropical_cyclone' / 'gori'
 exp_rel_path = Path('exposure') / 'states'
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+DEFAULT_SCALING_NPZ = str(BASE_DIR / 'data' / 'scaling_relative.npz')
+DEFAULT_COUNTY_REGION = str(BASE_DIR / 'data' / 'county_region.csv')
+DEFAULT_OUT_DIR = str(BASE_DIR / 'data' / 'impact')
+
 
 def calc_state_impact(
     state_name: str,
     data_dir: Path = data_dir_default,
     haz_file_name: str = 'tc_ncep_reanal.hdf5',
-    scaling_npz_path: str = '/home/users/smeiler/repos/hurricane_recovery_potential/data/scaling_relative.npz',
-    county_region_path: str = '/home/users/smeiler/repos/hurricane_recovery_potential/data/county_region.csv',
-    out_dir: str = '/home/groups/bakerjw/smeiler/climada_data/data/results/hrp_impacts_out',
+    scaling_npz_path: str = DEFAULT_SCALING_NPZ,
+    county_region_path: str = DEFAULT_COUNTY_REGION,
+    out_dir: str = DEFAULT_OUT_DIR,
     k: float = 1.0,
     scale_mode: str = 'compound',
     lower_threshold: float = 0.005,
-    scaling_npz_on_path: str = None,
-    out_dir_on: str = None,
 ):
-    """Calculate tropical cyclone impact for a given state.
-
-    The impact (CLIMADA wind damage) is computed ONCE. If a second scaling matrix
-    is supplied via ``scaling_npz_on_path`` (and ``out_dir_on``), the exporter is
-    run a second time on the same impact object, so the surge-ON results are
-    produced without recomputing the wind impact.
+    """Calculate tropical cyclone impact for a given state (surge-ON scaling).
 
     Parameters
     ----------
@@ -51,17 +49,13 @@ def calc_state_impact(
     haz_file_name : str
         Name of the hazard HDF5 file inside the hazard/gori directory.
     scaling_npz_path : str
-        Path to scaling NPZ file (surge-OFF, committed).
+        Path to scaling NPZ file (data/scaling_relative.npz, surge-ON by default).
     county_region_path : str
         Path to county_region CSV mapping.
     out_dir : str
-        Output directory for impacts (surge-OFF).
+        Output directory for impacts (data/impact/).
     k, scale_mode, lower_threshold :
         Scaling parameters forwarded to exporter.
-    scaling_npz_on_path : str, optional
-        Path to a second scaling NPZ (surge-ON). If given, a second export is run.
-    out_dir_on : str, optional
-        Output directory for the surge-ON export. Required if scaling_npz_on_path is set.
     """
     print(f"\nCalculating impact for {state_name}...")
 
@@ -83,12 +77,10 @@ def calc_state_impact(
     # Load impact functions
     impf_set_tc = IMPF_SET_TC_CAPRA
 
-    # Impact calculation (computed ONCE; reused for both exports)
     print("Calculating impact...")
     imp = ImpactCalc(exp, impf_set_tc, haz).impact(save_mat=True)
 
-    # Export 1: surge-OFF (committed scaling)
-    print(f"Exporting surge-OFF results to {out_dir}")
+    print(f"Exporting results to {out_dir}")
     export_state_and_county_results_all_events(
         exp=exp,
         imp=imp,
@@ -99,22 +91,6 @@ def calc_state_impact(
         scale_mode=scale_mode,
         lower_threshold=lower_threshold,
     )
-
-    # Export 2: surge-ON (optional, same impact object, no recompute)
-    if scaling_npz_on_path:
-        if not out_dir_on:
-            raise ValueError("out_dir_on must be set when scaling_npz_on_path is provided.")
-        print(f"Exporting surge-ON results to {out_dir_on}")
-        export_state_and_county_results_all_events(
-            exp=exp,
-            imp=imp,
-            scaling_npz_path=scaling_npz_on_path,
-            county_region_path=county_region_path,
-            out_dir=out_dir_on,
-            k=k,
-            scale_mode=scale_mode,
-            lower_threshold=lower_threshold,
-        )
 
 
 def _list_state_names_from_exposure_dir(data_dir: Path = data_dir_default) -> list:
@@ -136,16 +112,12 @@ if __name__ == '__main__':
     parser.add_argument('--state', help='State name to process (e.g., Florida)')
     parser.add_argument('--data-dir', default=str(data_dir_default), help='Base data directory')
     parser.add_argument('--haz-file', default='tc_ncep_reanal.hdf5', help='Hazard file name inside hazard/gori')
-    parser.add_argument('--scaling-npz', default='/home/users/smeiler/repos/hurricane_recovery_potential/data/scaling_relative.npz')
-    parser.add_argument('--county-region', default='/home/users/smeiler/repos/hurricane_recovery_potential/data/county_region.csv')
-    parser.add_argument('--out-dir', default='/home/groups/bakerjw/smeiler/climada_data/data/results/hrp_impacts_out')
+    parser.add_argument('--scaling-npz', default=DEFAULT_SCALING_NPZ)
+    parser.add_argument('--county-region', default=DEFAULT_COUNTY_REGION)
+    parser.add_argument('--out-dir', default=DEFAULT_OUT_DIR)
     parser.add_argument('--k', type=float, default=1.0)
     parser.add_argument('--scale-mode', default='compound')
     parser.add_argument('--lower-threshold', type=float, default=0.005)
-    parser.add_argument('--scaling-npz-on', default=None,
-                        help='Optional second scaling NPZ (surge-ON). If set, a second export is run.')
-    parser.add_argument('--out-dir-on', default=None,
-                        help='Output directory for the surge-ON export (required with --scaling-npz-on).')
     parser.add_argument('--all', action='store_true', help='Process all states found in exposure/states directory')
 
     args = parser.parse_args()
@@ -159,8 +131,6 @@ if __name__ == '__main__':
         k=args.k,
         scale_mode=args.scale_mode,
         lower_threshold=args.lower_threshold,
-        scaling_npz_on_path=args.scaling_npz_on,
-        out_dir_on=args.out_dir_on,
     )
 
     if args.state:
@@ -168,6 +138,5 @@ if __name__ == '__main__':
     else:
         # if --all specified or no state provided, run for every exposure file
         state_names = _list_state_names_from_exposure_dir(Path(args.data_dir))
-        to_run = state_names
-        for st in to_run:
+        for st in state_names:
             calc_state_impact(state_name=st, **common)

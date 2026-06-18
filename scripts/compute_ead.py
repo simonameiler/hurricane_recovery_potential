@@ -10,10 +10,10 @@ per-event frequencies directly.
 
 Example usages:
   # use default frequency and compute EAD from scaled repair cost
-  python3 scripts/compute_ead.py --input-dir ./impacts_out/by_event/scaled --metric repair_cost_sum_scaled
+  python3 scripts/compute_ead.py --metric repair_cost_sum_scaled
 
   # use hazard frequencies and compute EAD for DS1 affected units
-  python3 scripts/compute_ead.py --input-dir /path/to/by_event/raw --metric units_DS1_raw \
+  python3 scripts/compute_ead.py --input-dir data/impact/per_event --metric units_DS1_raw \
       --hazard /path/to/tc_ncep_reanal.hdf5 --event-key event_name
 
 """
@@ -23,6 +23,9 @@ from pathlib import Path
 import sys
 import pandas as pd
 import numpy as np
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+IMPACT_DIR = BASE_DIR / "data" / "impact"
 
 DEFAULT_FREQ = 0.00067334
 
@@ -94,8 +97,8 @@ def compute_ead(df: pd.DataFrame, metric: str, freq_map: dict | None, default_fr
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description="Compute EAD per region from per-event aggregated CSVs")
-    p.add_argument("--input-dir", type=Path, default=Path("./impacts_out/by_event/scaled"),
-                   help="Directory containing per-event aggregated CSVs (default: ./impacts_out/by_event/scaled)")
+    p.add_argument("--input-dir", type=Path, default=IMPACT_DIR / "per_event",
+                   help="Directory containing per-event aggregated CSVs (default: data/impact/per_event)")
     p.add_argument("--metric", required=True, help="Column name to use as impact metric (e.g. repair_cost_sum_scaled or units_DS1_raw)")
     p.add_argument("--hazard", type=Path, default=None, help="Optional hazard HDF5 to read per-event frequencies from (CLIMADA Hazard)")
     p.add_argument("--default-freq", type=float, default=DEFAULT_FREQ, help=f"Default per-event frequency if hazard not provided (default {DEFAULT_FREQ})")

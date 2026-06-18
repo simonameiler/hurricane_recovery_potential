@@ -10,38 +10,33 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
-import json
 from scipy import stats
 
 BASE_DIR = Path(__file__).parent.parent
 
 # Load recovery data
 print("Loading recovery data...")
-recovery_dir = BASE_DIR / 'data' / 'recovery_potential_per_scenario'
+recovery_csv = BASE_DIR / 'data' / 'recovery' / 'recovery_potential.csv'
 
-all_recovery_data = []
-for json_file in sorted(recovery_dir.glob('*.json')):
-    with open(json_file, 'r') as f:
-        data = json.load(f)
-    
-    for record in data:
-        all_recovery_data.append({
-            'event': record.get('event', json_file.stem.split('_')[0]),
-            'fips': str(record['fips']).zfill(5),
-            'recovery_time': float(record.get('recovery_potential [months]', 0)),
-            'capacity': float(record.get('reconstruction_capacity', 0))
-        })
+recovery_df_raw = pd.read_csv(recovery_csv, dtype={'fips': str})
+recovery_df_raw['fips'] = recovery_df_raw['fips'].astype(str).str.zfill(5)
+recovery_df_raw['recovery_potential_months'] = pd.to_numeric(
+    recovery_df_raw['recovery_potential_months'], errors='coerce')
 
-recovery_df = pd.DataFrame(all_recovery_data)
+recovery_df = pd.DataFrame({
+    'event': recovery_df_raw['event_name'].astype(str),
+    'fips': recovery_df_raw['fips'],
+    'recovery_time': recovery_df_raw['recovery_potential_months'].fillna(0.0),
+    'capacity': recovery_df_raw['reconstruction_capacity'].astype(float),
+})
 
 # Load impact data
 print("Loading impact data...")
-impacts_dir = BASE_DIR / 'impacts_out' / 'by_event' / 'scaled'
+impacts_dir = BASE_DIR / 'data' / 'impact' / 'per_event'
 
 all_impacts = []
 for csv_file in sorted(impacts_dir.glob('*.csv')):
     df = pd.read_csv(csv_file)
-    df['event'] = csv_file.stem.replace('_scaled', '')
     all_impacts.append(df)
 
 impacts_df = pd.concat(all_impacts, ignore_index=True)

@@ -9,7 +9,7 @@ Produces:
 
 Usage:
     python scripts/analyze_impacts.py \
-        --events-dir /path/to/by_event \
+        --events-dir data/impact/per_event \
         --output-dir /path/to/analysis_output
 """
 
@@ -63,12 +63,12 @@ def compare_repair_costs(raw_df, scaled_df, output_dir: Path):
     print("\n=== Repair Cost Comparison ===")
     
     # Aggregate by event
-    raw_by_event = raw_df.groupby("event_name")["repair_cost_sum_raw"].sum()
-    scaled_by_event = scaled_df.groupby("event_name")["repair_cost_sum_scaled"].sum()
+    raw_per_event = raw_df.groupby("event_name")["repair_cost_sum_raw"].sum()
+    scaled_per_event = scaled_df.groupby("event_name")["repair_cost_sum_scaled"].sum()
     
     comparison = pd.DataFrame({
-        "raw_total": raw_by_event,
-        "scaled_total": scaled_by_event,
+        "raw_total": raw_per_event,
+        "scaled_total": scaled_per_event,
     }).fillna(0)
     comparison["scaling_factor"] = comparison["scaled_total"] / comparison["raw_total"].replace(0, np.nan)
     comparison["absolute_change"] = comparison["scaled_total"] - comparison["raw_total"]
@@ -643,9 +643,9 @@ def create_normalized_spatial_comparison(comparison, output_dir: Path):
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze and compare raw vs scaled impacts")
-    parser.add_argument("--events-dir", type=Path, 
-                       default="impacts_out/by_event",
-                       help="Directory containing raw/ and scaled/ subdirectories")
+    parser.add_argument("--events-dir", type=Path,
+                       default="data/impact/per_event",
+                       help="Directory containing per-event aggregated CSVs")
     parser.add_argument("--output-dir", type=Path, default="./analysis_output",
                        help="Output directory for plots and summaries")
     parser.add_argument("--shapefile", type=Path,
@@ -653,7 +653,7 @@ def main():
                        help="Path to US counties shapefile for mapping")
     parser.add_argument("--frequency", type=float, default=DEFAULT_FREQ,
                        help="Event frequency (events/year) for EAD calculation")
-    parser.add_argument("--aal-file", type=Path, default="impacts_out/AAL_ncep_reanal.mat",
+    parser.add_argument("--aal-file", type=Path, default="data/impact/AAL_ncep_reanal.mat",
                        help="Path to AAL .mat file for comparison")
     parser.add_argument("--county-mapping", type=Path, default="data/county_region.csv",
                        help="Path to county mapping CSV with county_index and fips")

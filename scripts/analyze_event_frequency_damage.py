@@ -30,15 +30,14 @@ def load_event_data():
     """Load all per-event scaled impact data."""
     print("Loading per-event impact data...")
     
-    by_event_dir = BASE_DIR / "impacts_out" / "by_event" / "scaled"
-    event_files = sorted(by_event_dir.glob("*_scaled.csv"))
-    
+    per_event_dir = BASE_DIR / "data" / "impact" / "per_event"
+    event_files = sorted(per_event_dir.glob("*.csv"))
+
     print(f"Found {len(event_files)} event files")
-    
+
     all_events = []
     for f in event_files:
         df = pd.read_csv(f)
-        df['event_name'] = f.stem.replace('_scaled', '')
         all_events.append(df)
     
     events_df = pd.concat(all_events, ignore_index=True)
