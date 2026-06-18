@@ -11,10 +11,8 @@ Run with:
   conda activate climada_env && python scripts/compute_recovery_potential.py
 
 Inputs:
-  data/recovery_potential_per_scenario/   pyrecodes per-event JSONs
-    Each file: {event_id}_scaled_recovery_potential.json
-    Each record: {"fips": ..., "recovery_potential [months]": ...,
-                  "reconstruction_capacity": ..., "event": ...}
+  data/recovery/recovery_potential.csv
+    Columns: event_name, fips, reconstruction_capacity, recovery_potential_months
 
 Output:
   analysis_output/earp_per_county.csv
@@ -24,7 +22,6 @@ Output:
 
 from __future__ import annotations
 
-import json
 import warnings
 from pathlib import Path
 
@@ -40,7 +37,7 @@ warnings.filterwarnings("ignore")
 SCRIPT_DIR = Path(__file__).parent
 BASE_DIR = SCRIPT_DIR.parent
 
-RECOVERY_DIR = BASE_DIR / "data" / "recovery_potential_per_scenario"
+RECOVERY_CSV = BASE_DIR / "data" / "recovery" / "recovery_potential.csv"
 OUTPUT_FILE = BASE_DIR / "analysis_output" / "earp_per_county.csv"
 
 DEFAULT_FREQ = 0.00067334  # events per year (Poisson rate used throughout)
@@ -51,32 +48,22 @@ DEFAULT_FREQ = 0.00067334  # events per year (Poisson rate used throughout)
 # ---------------------------------------------------------------------------
 
 def load_recovery_potential_data() -> pd.DataFrame:
-    """Load all per-event pyrecodes recovery JSONs into a single DataFrame."""
-    recovery_files = sorted(RECOVERY_DIR.glob("*_scaled_recovery_potential.json"))
-    if not recovery_files:
+    """Load the consolidated recovery potential CSV."""
+    if not RECOVERY_CSV.exists():
         raise FileNotFoundError(
-            f"No recovery JSON files found in {RECOVERY_DIR}. "
-            "Ensure pyrecodes outputs are present before running this script."
+            f"Recovery CSV not found: {RECOVERY_CSV}. "
+            "Run scripts/run_pyrecodes_light.py first."
         )
-    print(f"Found {len(recovery_files)} recovery JSON files – loading …")
-
-    frames = []
-    for idx, f in enumerate(recovery_files, 1):
-        if idx % 500 == 0:
-            print(f"  {idx}/{len(recovery_files)} …")
-        with open(f) as fh:
-            frames.append(pd.DataFrame(json.load(fh)))
-
-    df = pd.concat(frames, ignore_index=True)
+    print(f"Loading {RECOVERY_CSV} …")
+    df = pd.read_csv(RECOVERY_CSV, dtype={"fips": str})
     df["fips"] = df["fips"].astype(str).str.zfill(5)
-
-    # Infinite recovery times arise when reconstruction_capacity == 0; treat as NaN.
+    # rename to legacy column name used downstream
+    df = df.rename(columns={"recovery_potential_months": "recovery_potential [months]"})
     df["recovery_potential [months]"] = (
         df["recovery_potential [months]"].replace([np.inf, -np.inf], np.nan)
     )
-
     print(f"Loaded {len(df):,} county-event records "
-          f"({df['event'].nunique()} events, {df['fips'].nunique()} counties)")
+          f"({df['event_name'].nunique()} events, {df['fips'].nunique()} counties)")
     return df
 
 

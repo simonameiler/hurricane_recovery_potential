@@ -24,10 +24,10 @@ Priority screen = Map B definition: EAUA tercile 3 (highest risk) x CC tercile 1
 
 Inputs (relative to repo root):
   data/selected_states_counties_with_permits.csv   building-permit data
-  data/external/NRI_Table_Counties.csv             FEMA NRI county table
+  data/NRI_Table_Counties.csv                      FEMA NRI county table
   analysis_output/earp_per_county.csv              written by TC_NA_recovery_analysis_reorganized_complete.py
   analysis_output/county_event_frequency_damage_metrics.csv  written by analyze_event_frequency_damage.py
-  data/recovery_potential_per_scenario/            pyrecodes per-scenario JSON outputs (external; not committed)
+  data/recovery/recovery_potential.csv             consolidated recovery CSV (run run_pyrecodes_light.py)
   data/US_counties.shp                             county boundaries
 
 Outputs (all written to analysis_output/):
@@ -46,7 +46,6 @@ Outputs (all written to analysis_output/):
 """
 
 from pathlib import Path
-import json
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -78,17 +77,17 @@ F_EARP = _pick(BASE_DIR / "analysis_output" / "earp_per_county.csv",
                HERE / "NRI_GDB_CensusTracts" / "earp_per_county.csv")
 F_DAMAGE = _pick(BASE_DIR / "analysis_output" / "county_event_frequency_damage_metrics.csv",
                  HERE / "NRI_GDB_CensusTracts" / "county_event_frequency_damage_metrics.csv")
-SCEN_DIR = _pick(BASE_DIR / "data" / "recovery_potential_per_scenario",
-                 HERE / "NRI_GDB_CensusTracts" / "recovery_potential_per_scenario")
-NRI_COUNTY = _pick(BASE_DIR / "data" / "external" / "NRI_Table_Counties.csv",
+RECOVERY_CSV = _pick(BASE_DIR / "data" / "recovery" / "recovery_potential.csv",
+                     HERE / "recovery_potential.csv")
+IMPACT_DIR = BASE_DIR / "data" / "impact" / "per_event"
+NRI_COUNTY = _pick(BASE_DIR / "data" / "NRI_Table_Counties.csv",
                    HERE / "NRI_Table_Counties" / "NRI_Table_Counties.csv")
 COUNTIES_SHP = _pick(BASE_DIR / "data" / "US_counties.shp",
                      HERE / "US_counties.shp")
 OUT_DIR = (BASE_DIR / "analysis_output") if (BASE_DIR / "analysis_output").exists() else HERE
 
 CAP_COL = "Average_Building_Permits(12 months)"
-REC_KEY = "recovery_potential [months]"
-FREQ = 0.00067334  # events/yr, Poisson rate used in the study
+FREQ = 1 / 1500  # events/yr, Poisson rate used in the study (≈0.000667)
 
 
 def fips5(s):
@@ -98,15 +97,11 @@ def fips5(s):
 
 def load_per_event_median():
     """Paper-style per-event recovery: median over ALL footprint events (incl.
-    no-damage zeros) for each county; counties with zero capacity (=> inf) dropped."""
-    rows = []
-    for fp in sorted(SCEN_DIR.glob("*_scaled_recovery_potential.json")):
-        with open(fp) as fh:
-            for rec in json.load(fh):
-                rows.append((str(rec["fips"]), float(rec[REC_KEY])))
-    df = pd.DataFrame(rows, columns=["fips", "rec"])
+    no-damage zeros) for each county; counties with zero capacity (NaN) dropped."""
+    df = pd.read_csv(RECOVERY_CSV, dtype={"fips": str})
     df["fips"] = fips5(df["fips"])
-    finite = df[np.isfinite(df["rec"])]              # drop inf (zero-capacity counties)
+    df["rec"] = pd.to_numeric(df["recovery_potential_months"], errors="coerce")
+    finite = df[np.isfinite(df["rec"])]              # drop NaN (zero-capacity counties)
     agg = finite.groupby("fips")["rec"].agg(
         median_recovery_per_event="median", n_events="count").reset_index()
     print(f"  counties with finite recovery records: {len(agg)}")
@@ -122,15 +117,23 @@ def load_nri_county():
     """
     df = pd.read_csv(NRI_COUNTY, dtype={"STCOFIPS": str})
     df["fips"] = df["STCOFIPS"].str.zfill(5)
-    for c in ["RESL_SCORE", "SOVI_SCORE", "HRCN_EALT", "CFLD_EALT", "POPULATION"]:
+    nri_cols = ["RESL_SCORE", "SOVI_SCORE", "HRCN_EALT", "CFLD_EALT", "POPULATION"]
+    # HRCN_EALB = hurricane building EAL (subset of HRCN_EALT; may not exist in all NRI versions)
+    if "HRCN_EALB" in df.columns:
+        nri_cols.append("HRCN_EALB")
+    for c in nri_cols:
         df[c] = pd.to_numeric(df[c], errors="coerce")
-    return df.rename(columns={"RESL_SCORE": "nri_resilience",
-                              "SOVI_SCORE": "nri_social_vuln",
-                              "HRCN_EALT": "nri_hurricane_eal",
-                              "CFLD_EALT": "nri_coastal_flood_eal",
-                              "POPULATION": "nri_population"})[
-        ["fips", "nri_population", "nri_resilience", "nri_social_vuln",
-         "nri_hurricane_eal", "nri_coastal_flood_eal"]]
+    rename = {"RESL_SCORE": "nri_resilience", "SOVI_SCORE": "nri_social_vuln",
+              "HRCN_EALT": "nri_hurricane_eal", "CFLD_EALT": "nri_coastal_flood_eal",
+              "POPULATION": "nri_population"}
+    if "HRCN_EALB" in df.columns:
+        rename["HRCN_EALB"] = "nri_hurricane_eal_building"
+    df = df.rename(columns=rename)
+    keep = ["fips", "nri_population", "nri_resilience", "nri_social_vuln",
+            "nri_hurricane_eal", "nri_coastal_flood_eal"]
+    if "nri_hurricane_eal_building" in df.columns:
+        keep.append("nri_hurricane_eal_building")
+    return df[keep]
 
 
 def load_inputs():
@@ -140,6 +143,23 @@ def load_inputs():
     perm = pd.read_csv(PERMITS); perm["fips"] = fips5(perm["FIPS"])
     perm["construction_capacity"] = perm[CAP_COL] / 12.0
     return earp, dmg, perm
+
+
+def load_earc() -> pd.DataFrame:
+    """Compute Expected Annual Repair Cost (EARC) per county from per_event CSVs.
+
+    EARC_c = Σ_e repair_cost_sum_scaled_{e,c} * FREQ
+    """
+    files = sorted(IMPACT_DIR.glob("*.csv"))
+    if not files:
+        raise FileNotFoundError(f"No per_event CSVs in {IMPACT_DIR}")
+    print(f"Loading EARC from {len(files)} per_event files ...")
+    df = pd.concat([pd.read_csv(f, usecols=["fips", "repair_cost_sum_scaled"]) for f in files],
+                   ignore_index=True)
+    earc = df.groupby("fips", as_index=False)["repair_cost_sum_scaled"].sum()
+    earc["earc"] = earc["repair_cost_sum_scaled"] * FREQ
+    earc["fips"] = fips5(earc["fips"])
+    return earc[["fips", "earc"]]
 
 
 def tercile(s):
@@ -185,12 +205,12 @@ def write_latex_tables(out_dir, risk, corr, partial, si, n_sample):
           r"Risk Index (NRI), over the analysis sample of " + str(n_sample) + r" US "
           r"Atlantic-coast counties with positive modelled risk, recovery potential and "
           r"construction capacity. Panel~A compares the modelled hazard layer (expected "
-          r"annual units affected, EAUA) with the NRI's independent, historically "
-          r"calibrated monetary risk. Panel~B reports rank correlations between the "
-          r"model's quantities and the NRI socio-economic layers (convergent and "
-          r"discriminant validity). Panel~C re-estimates the association with Social "
-          r"Vulnerability after controlling for exposure. Entries are Spearman rank "
-          r"coefficients; Panel~A also gives Pearson coefficients on "
+          r"annual units affected, EAUA; expected annual repair cost, EARC) with the "
+          r"NRI's independent, historically calibrated monetary risk. Panel~B reports "
+          r"rank correlations between the model's quantities and the NRI socio-economic "
+          r"layers (convergent and discriminant validity). Panel~C re-estimates the "
+          r"association with Social Vulnerability after controlling for exposure. Entries "
+          r"are Spearman rank coefficients; Panel~A also gives Pearson coefficients on "
           r"$\log_{10}$-transformed values. All coefficients are significant at $p<0.01$ "
           r"unless marked.}"),
          r"\label{tab:nri_evaluation}",
@@ -200,6 +220,15 @@ def write_latex_tables(out_dir, risk, corr, partial, si, n_sample):
          r" & Spearman & Pearson (log) & $n$ \\", r"\hline"]
     for key in ["EAUA vs NRI hurricane (wind) EAL", "EAUA vs NRI coastal-flood EAL",
                 "EAUA vs NRI wind + coastal-flood EAL"]:
+        r = rrow.get(key)
+        if r is None:
+            continue
+        L.append(f"{key} & {_tex_signed(r['spearman_r'])} & "
+                 f"{_tex_signed(r['pearson_log_r'])} & {int(r['n'])} \\\\")
+    # EARC rows (added if available)
+    for key in list(rrow.keys()):
+        if not key.startswith("EARC"):
+            continue
         r = rrow[key]
         L.append(f"{key} & {_tex_signed(r['spearman_r'])} & "
                  f"{_tex_signed(r['pearson_log_r'])} & {int(r['n'])} \\\\")
@@ -268,11 +297,13 @@ def main():
     per_event = load_per_event_median()
     earp, dmg, perm = load_inputs()
     nri = load_nri_county()
+    earc_df = load_earc()
 
     m = (earp.merge(dmg[["fips", "eaua", "total_weighted_damage_units", "total_units"]], on="fips", how="outer")
               .merge(perm[["fips", "NAME", "STATE_NAME", "construction_capacity"]], on="fips", how="left")
               .merge(per_event, on="fips", how="left")
-              .merge(nri, on="fips", how="left"))
+              .merge(nri, on="fips", how="left")
+              .merge(earc_df, on="fips", how="left"))
 
     # analysis sample: positive EARP / EAUA / capacity (matches the paper)
     m["in_sample"] = (m["earp_months_per_year"] > 0) & (m["eaua"] > 0) & (m["construction_capacity"] > 0)
@@ -309,11 +340,25 @@ def main():
                    ("nri_coastal_flood_eal", "NRI coastal-flood EAL"),
                    ("nri_wind_plus_cflood_eal", "NRI wind + coastal-flood EAL")]:
         sp, pe, sp_p, n = corr_pair("eaua", yc)
-        risk_rows.append({"comparison": f"EAUA vs {yl}", "spearman_r": round(sp, 3),
+        risk_rows.append({"metric": "EAUA", "comparison": f"EAUA vs {yl}",
+                          "spearman_r": round(sp, 3),
+                          "pearson_log_r": round(pe, 3), "p": f"{sp_p:.1e}", "n": n})
+    # EARC vs NRI EAL (building EAL preferred; fall back to hurricane total EAL)
+    earc_nri_cols = []
+    if "nri_hurricane_eal_building" in s.columns:
+        earc_nri_cols.append(("nri_hurricane_eal_building", "NRI hurricane building EAL"))
+    earc_nri_cols += [("nri_hurricane_eal", "NRI hurricane (wind) EAL"),
+                      ("nri_wind_plus_cflood_eal", "NRI wind + coastal-flood EAL")]
+    for yc, yl in earc_nri_cols:
+        if yc not in s.columns:
+            continue
+        sp, pe, sp_p, n = corr_pair("earc", yc)
+        risk_rows.append({"metric": "EARC", "comparison": f"EARC vs {yl}",
+                          "spearman_r": round(sp, 3),
                           "pearson_log_r": round(pe, 3), "p": f"{sp_p:.1e}", "n": n})
     risk = pd.DataFrame(risk_rows)
     risk.to_csv(OUT_DIR / "nri_risk_comparison.csv", index=False)
-    print("\nHazard layer (EAUA vs NRI EAL):")
+    print("\nHazard layer (EAUA/EARC vs NRI EAL):")
     print(risk.to_string(index=False))
 
     # internal consistency (both statistics, for the record)

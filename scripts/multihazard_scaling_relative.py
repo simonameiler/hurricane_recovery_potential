@@ -115,7 +115,7 @@ def compute_scaling_relative(
         I_rain = (R > thr) | (np.isnan(thr) & (R > 0.0))
 
     if surge_2yr is None:
-        I_surge = (S > 0.0) & is_coastal[None, :] & False  # conservative default if unknown
+        I_surge = (S > 0.0) & is_coastal[None, :]
     else:
         sth = np.asarray(surge_2yr, dtype=float)[None, :]
         I_surge = (S > sth) & is_coastal[None, :]

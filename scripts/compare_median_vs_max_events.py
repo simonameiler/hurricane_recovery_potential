@@ -18,7 +18,6 @@ from matplotlib.colors import LogNorm
 from matplotlib.ticker import NullLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pathlib import Path
-import json
 
 SCRIPT_DIR = Path(__file__).parent
 BASE_DIR = SCRIPT_DIR.parent
@@ -43,18 +42,17 @@ def load_event_data():
     print("LOADING DATA")
     print("="*80)
     print("\n1. Loading per-event impact data...")
-    
-    by_event_dir = BASE_DIR / "impacts_out" / "by_event" / "scaled"
-    event_files = sorted(by_event_dir.glob("*_scaled.csv"))
-    
+
+    per_event_dir = BASE_DIR / "data" / "impact" / "per_event"
+    event_files = sorted(per_event_dir.glob("*.csv"))
+
     print(f"   Found {len(event_files)} event files")
-    
+
     all_events = []
     for f in event_files:
         df = pd.read_csv(f)
-        df['event_name'] = f.stem.replace('_scaled', '')
         all_events.append(df)
-    
+
     events_df = pd.concat(all_events, ignore_index=True)
     events_df['fips'] = events_df['fips'].astype(str).str.zfill(5)
     
@@ -68,30 +66,16 @@ def load_event_data():
 def load_recovery_data():
     """Load per-event recovery potential data."""
     print("\n2. Loading recovery potential data...")
-    
-    recovery_dir = BASE_DIR / "data" / "recovery_potential_per_scenario"
-    recovery_files = list(recovery_dir.glob("*_scaled_recovery_potential.json"))
-    
-    print(f"   Found {len(recovery_files)} recovery files")
-    
-    all_recovery = []
-    for idx, f in enumerate(recovery_files):
-        if (idx + 1) % 500 == 0:
-            print(f"   Loaded {idx + 1}/{len(recovery_files)} files...")
-        
-        with open(f, 'r') as file:
-            data = json.load(file)
-            df = pd.DataFrame(data)
-            all_recovery.append(df)
-    
-    recovery_df = pd.concat(all_recovery, ignore_index=True)
+
+    recovery_csv = BASE_DIR / "data" / "recovery" / "recovery_potential.csv"
+    recovery_df = pd.read_csv(recovery_csv, dtype={"fips": str})
     recovery_df['fips'] = recovery_df['fips'].astype(str).str.zfill(5)
     recovery_df['recovery_potential [months]'] = (
-        recovery_df['recovery_potential [months]'].replace([np.inf, -np.inf], np.nan)
+        pd.to_numeric(recovery_df['recovery_potential_months'], errors='coerce')
     )
-    
+
     print(f"   Loaded {len(recovery_df)} recovery records")
-    
+
     return recovery_df
 
 
