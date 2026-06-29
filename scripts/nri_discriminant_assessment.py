@@ -13,7 +13,7 @@ Reference indices (FEMA National Risk Index, census-tract product rolled up to c
   HRCN_EALT  -> Hurricane expected annual loss (USD)   [exposure control]
 
 Our metrics (analysis sample = positive EARP / EAUA / capacity):
-  construction_capacity        building permits per month (CC = permits(12mo)/12)
+  construction_capacity        building permits per month (CC = Average_Building_Permits(12 months))
   earp_months_per_year         annual recovery potential (EARP)
   median_recovery_per_event    per-event recovery potential, paper definition:
                                median over ALL footprint events (incl. no-damage
@@ -141,7 +141,7 @@ def load_inputs():
     dmg = pd.read_csv(F_DAMAGE); dmg["fips"] = fips5(dmg["fips"])
     dmg["eaua"] = dmg["total_weighted_damage_units"] * FREQ
     perm = pd.read_csv(PERMITS); perm["fips"] = fips5(perm["FIPS"])
-    perm["construction_capacity"] = perm[CAP_COL] / 12.0
+    perm["construction_capacity"] = perm[CAP_COL]
     return earp, dmg, perm
 
 
@@ -368,7 +368,8 @@ def main():
                  ("median_recovery_per_event", "eaua")]:
         d = s[[a, b]].replace([np.inf, -np.inf], np.nan).dropna()
         sp = spearmanr(d[a], d[b])[0]
-        pe = pearsonr(np.log10(d[a]), np.log10(d[b]))[0]
+        dlog = d[(d[a] > 0) & (d[b] > 0)]
+        pe = pearsonr(np.log10(dlog[a]), np.log10(dlog[b]))[0] if len(dlog) >= 3 else float("nan")
         print(f"  {a:26s} vs {b:22s}: Spearman={sp:+.3f}  Pearson(log)={pe:+.3f}  n={len(d)}")
 
     # ---- discriminant correlations: our metrics vs NRI ----

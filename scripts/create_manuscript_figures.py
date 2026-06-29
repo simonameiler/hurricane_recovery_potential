@@ -340,7 +340,7 @@ def load_annual_metrics():
     # Construction Capacity (CC; permits/month)
     permits = pd.read_csv(DATA_DIR / "selected_states_counties_with_permits.csv")
     permits["fips"] = permits["FIPS"].astype(str).str.zfill(5)
-    permits["cc"] = permits["Average_Building_Permits(12 months)"] / 12
+    permits["cc"] = permits["Average_Building_Permits(12 months)"]
     cc_df = permits[["fips", "cc"]].copy()
 
     print(f"    EAUA: {len(eaua_df)} counties")

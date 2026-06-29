@@ -127,11 +127,18 @@ def export_state_and_county_results_all_events(
     per_event_dir.mkdir(parents=True, exist_ok=True)
 
     # load scaling
-    scaling_data = np.load(scaling_npz_path)
+    scaling_data = np.load(scaling_npz_path, allow_pickle=True)
     if "Scaling" not in scaling_data:
         raise KeyError("Scaling matrix not found in NPZ file")
     scaling_matrix = scaling_data["Scaling"]
     county_indices = scaling_data["county_index"]
+
+    # named-event lookup: populated when NPZ contains an 'event_names' array
+    # (historical NPZ only); synthetic NPZ omits it and uses the numeric path below
+    ev_name_to_row: dict = {}
+    if "event_names" in scaling_data.files:
+        for _row_i, _nm in enumerate(scaling_data["event_names"]):
+            ev_name_to_row[str(_nm).strip()] = _row_i
 
     # build county_index -> fips if provided
     county_index_to_fips = {}
@@ -180,12 +187,12 @@ def export_state_and_county_results_all_events(
         # Scaling NPZ typically indexes events by track number (e.g. '0001' -> row 0).
         event_row_idx = None
         try:
-            # if event names are numeric (e.g., '0312'), map to 0-based index
+            # synthetic path: numeric names like '0312' → 0-based row index
             event_id_int = int(str(ev_name))
             event_row_idx = int(event_id_int) - 1
         except Exception:
-            # fallback: if ev_name is not numeric, we cannot map reliably
-            event_row_idx = None
+            # named-event path (e.g., ATCF ID 'AL142018'): look up in event_names array
+            event_row_idx = ev_name_to_row.get(str(ev_name))
 
         if event_row_idx is not None and not (0 <= event_row_idx < scaling_matrix.shape[0]):
             # scaling matrix has no row for this event (e.g., missing tracks); skip scaling
