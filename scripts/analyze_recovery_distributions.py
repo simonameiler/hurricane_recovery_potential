@@ -1,14 +1,14 @@
 """
 Analyze distributions of recovery times, impacts, and capacity
 
-Rather than just summary statistics, examine the full distribution
-to understand the nature of recovery challenges in each county.
+Computes per-county distribution statistics (mean, percentiles, skewness,
+coefficient of variation) of recovery times and weighted damage across the
+probabilistic event set, and writes analysis_output/county_distribution_metrics.csv
+(consumed by notebooks/probabilistic_analysis.ipynb, skewness map).
 """
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from pathlib import Path
 from scipy import stats
 
@@ -26,7 +26,8 @@ recovery_df_raw['recovery_potential_months'] = pd.to_numeric(
 recovery_df = pd.DataFrame({
     'event': recovery_df_raw['event_name'].astype(str),
     'fips': recovery_df_raw['fips'],
-    'recovery_time': recovery_df_raw['recovery_potential_months'].fillna(0.0),
+    # NaN recovery = zero-capacity county (undefined recovery); dropped below
+    'recovery_time': recovery_df_raw['recovery_potential_months'],
     'capacity': recovery_df_raw['reconstruction_capacity'].astype(float),
 })
 
@@ -40,7 +41,9 @@ for csv_file in sorted(impacts_dir.glob('*.csv')):
     all_impacts.append(df)
 
 impacts_df = pd.concat(all_impacts, ignore_index=True)
+impacts_df = impacts_df.rename(columns={'event_name': 'event'})
 impacts_df['fips'] = impacts_df['fips'].astype(str).str.zfill(5)
+impacts_df['event'] = impacts_df['event'].astype(str)
 
 # Compute weighted damage
 impacts_df['weighted_damage'] = (
@@ -54,7 +57,7 @@ impacts_df['weighted_damage'] = (
 merged = recovery_df.merge(impacts_df[['event', 'fips', 'weighted_damage']], 
                            on=['event', 'fips'], how='left')
 
-# Filter out infinite recovery times
+# Drop undefined recovery (zero-capacity counties) and any infinities
 merged = merged[(merged['recovery_time'] != np.inf) & (merged['recovery_time'].notna())]
 
 print(f"Loaded {len(merged):,} event-county pairs")
@@ -118,140 +121,11 @@ def compute_distribution_metrics(group):
 
 county_dist = merged.groupby('fips').apply(compute_distribution_metrics).reset_index()
 
-print(f"Computed distribution metrics for {len(county_dist)} counties")
-
-# Identify distribution patterns
-print("\n" + "="*60)
-print("DISTRIBUTION PATTERN ANALYSIS")
-print("="*60)
-
-# 1. Coefficient of Variation (variability relative to mean)
-print("\n1. RECOVERY TIME VARIABILITY (CV = std/mean)")
-print(f"   Low variability (CV < 1): {(county_dist['rt_cv'] < 1).sum()} counties")
-print(f"   Moderate variability (1 ≤ CV < 2): {((county_dist['rt_cv'] >= 1) & (county_dist['rt_cv'] < 2)).sum()} counties")
-print(f"   High variability (CV ≥ 2): {(county_dist['rt_cv'] >= 2).sum()} counties")
-print(f"   Mean CV: {county_dist['rt_cv'].mean():.2f}")
-
-# 2. Skewness (tail behavior)
-print("\n2. DISTRIBUTION SHAPE (Skewness)")
-print(f"   Left-skewed (<0): {(county_dist['rt_skew'] < 0).sum()} counties")
-print(f"   Symmetric (≈0): {((county_dist['rt_skew'] >= -0.5) & (county_dist['rt_skew'] <= 0.5)).sum()} counties")
-print(f"   Right-skewed (>0): {(county_dist['rt_skew'] > 0).sum()} counties")
-print(f"   Highly right-skewed (>2): {(county_dist['rt_skew'] > 2).sum()} counties - dominated by extreme events")
-print(f"   Mean skewness: {county_dist['rt_skew'].mean():.2f}")
-
-# 3. Event frequency patterns
-print("\n3. EVENT FREQUENCY PATTERNS")
-print(f"   Mostly no damage (>50% zero recovery): {(county_dist['frac_rt_zero'] > 0.5).sum()} counties")
-print(f"   Frequent minor events (>30% low recovery): {(county_dist['frac_rt_low'] > 0.3).sum()} counties")
-print(f"   Some extreme events (>5% extreme): {(county_dist['frac_rt_extreme'] > 0.05).sum()} counties")
-
-# 4. Tail dominance: compare P90/median ratio
-county_dist['tail_dominance'] = county_dist['rt_p90'] / (county_dist['rt_median'] + 0.001)
-print("\n4. TAIL DOMINANCE (P90/Median ratio)")
-print(f"   Low (<10x): {(county_dist['tail_dominance'] < 10).sum()} counties - relatively uniform")
-print(f"   Moderate (10-100x): {((county_dist['tail_dominance'] >= 10) & (county_dist['tail_dominance'] < 100)).sum()} counties")
-print(f"   High (≥100x): {(county_dist['tail_dominance'] >= 100).sum()} counties - extreme tail risk")
-
-# 5. Capacity constraint indicator
-county_dist['capacity_limited'] = county_dist['capacity'] < 10
-print("\n5. CAPACITY CONSTRAINTS")
-print(f"   Very low capacity (<10 units/month): {county_dist['capacity_limited'].sum()} counties")
-print(f"   Adequate capacity (≥10 units/month): {(~county_dist['capacity_limited']).sum()} counties")
-
-# Create visualization comparing distribution patterns
-print("\nCreating distribution comparison plots...")
-
-fig = plt.figure(figsize=(20, 12))
-
-# Plot 1: CV vs Skewness
-ax1 = plt.subplot(2, 3, 1)
-scatter = ax1.scatter(county_dist['rt_skew'], county_dist['rt_cv'], 
-                     c=county_dist['capacity'], cmap='viridis', alpha=0.6, s=30)
-ax1.set_xlabel('Skewness (shape)', fontsize=11, fontweight='bold')
-ax1.set_ylabel('Coefficient of Variation (variability)', fontsize=11, fontweight='bold')
-ax1.set_title('A) Distribution Shape vs Variability', fontsize=12, fontweight='bold')
-ax1.axhline(1, color='red', linestyle='--', alpha=0.3, label='CV=1')
-ax1.axvline(0, color='red', linestyle='--', alpha=0.3, label='Symmetric')
-ax1.grid(True, alpha=0.3)
-plt.colorbar(scatter, ax=ax1, label='Capacity')
-ax1.set_xlim(-2, 10)
-ax1.set_ylim(0, 5)
-
-# Plot 2: Tail dominance
-ax2 = plt.subplot(2, 3, 2)
-ax2.hist(np.log10(county_dist['tail_dominance'] + 1), bins=50, alpha=0.7, edgecolor='black')
-ax2.set_xlabel('Log10(P90/Median)', fontsize=11, fontweight='bold')
-ax2.set_ylabel('Number of Counties', fontsize=11, fontweight='bold')
-ax2.set_title('B) Tail Dominance Distribution', fontsize=12, fontweight='bold')
-ax2.axvline(np.log10(10), color='red', linestyle='--', label='10x threshold')
-ax2.axvline(np.log10(100), color='orange', linestyle='--', label='100x threshold')
-ax2.legend()
-ax2.grid(True, alpha=0.3)
-
-# Plot 3: Event fraction breakdown
-ax3 = plt.subplot(2, 3, 3)
-fractions = county_dist[['frac_rt_zero', 'frac_rt_low', 'frac_rt_medium', 
-                         'frac_rt_high', 'frac_rt_extreme']].mean()
-ax3.bar(range(5), fractions, color=['gray', 'green', 'yellow', 'orange', 'red'])
-ax3.set_xticks(range(5))
-ax3.set_xticklabels(['Zero', 'Low\n(<1mo)', 'Medium\n(1-12mo)', 
-                     'High\n(1-10yr)', 'Extreme\n(>10yr)'], fontsize=9)
-ax3.set_ylabel('Mean Fraction of Events', fontsize=11, fontweight='bold')
-ax3.set_title('C) Average Event Severity Distribution', fontsize=12, fontweight='bold')
-ax3.grid(True, axis='y', alpha=0.3)
-
-# Plot 4: Damage vs Recovery correlation
-ax4 = plt.subplot(2, 3, 4)
-scatter = ax4.scatter(county_dist['damage_recovery_corr'], county_dist['capacity'],
-                     c=county_dist['rt_mean'], cmap='Reds', alpha=0.6, s=30)
-ax4.set_xlabel('Damage-Recovery Correlation', fontsize=11, fontweight='bold')
-ax4.set_ylabel('Capacity (units/month)', fontsize=11, fontweight='bold')
-ax4.set_title('D) Damage-Recovery Relationship vs Capacity', fontsize=12, fontweight='bold')
-ax4.axvline(0.7, color='blue', linestyle='--', alpha=0.3, label='Strong correlation')
-ax4.grid(True, alpha=0.3)
-plt.colorbar(scatter, ax=ax4, label='Mean Recovery Time')
-ax4.legend()
-
-# Plot 5: Capacity effect on variability
-ax5 = plt.subplot(2, 3, 5)
-low_cap = county_dist[county_dist['capacity'] < 10]
-high_cap = county_dist[county_dist['capacity'] >= 10]
-ax5.scatter(low_cap['rt_median'], low_cap['rt_p90'], alpha=0.5, label='Low capacity', s=30)
-ax5.scatter(high_cap['rt_median'], high_cap['rt_p90'], alpha=0.5, label='High capacity', s=30)
-ax5.plot([0, 1000], [0, 1000], 'k--', alpha=0.3, label='1:1 line')
-ax5.set_xlabel('Median Recovery Time (months)', fontsize=11, fontweight='bold')
-ax5.set_ylabel('P90 Recovery Time (months)', fontsize=11, fontweight='bold')
-ax5.set_title('E) Median vs P90 by Capacity', fontsize=12, fontweight='bold')
-ax5.legend()
-ax5.grid(True, alpha=0.3)
-ax5.set_xlim(0, 200)
-ax5.set_ylim(0, 5000)
-
-# Plot 6: Percentile ranges
-ax6 = plt.subplot(2, 3, 6)
-# Select sample counties with different patterns
-sample_counties = county_dist.nlargest(10, 'rt_mean')[['fips', 'rt_p10', 'rt_median', 'rt_p90', 'rt_max']].head(10)
-y_pos = range(len(sample_counties))
-for i, (idx, row) in enumerate(sample_counties.iterrows()):
-    ax6.plot([row['rt_p10'], row['rt_p90']], [i, i], 'b-', linewidth=2, alpha=0.6)
-    ax6.plot(row['rt_median'], i, 'ro', markersize=6)
-    ax6.plot(row['rt_max'], i, 'r^', markersize=6, alpha=0.5)
-
-ax6.set_yticks(y_pos)
-ax6.set_yticklabels(sample_counties['fips'].values, fontsize=8)
-ax6.set_xlabel('Recovery Time (months)', fontsize=11, fontweight='bold')
-ax6.set_title('F) Recovery Time Ranges (Top 10 Mean Recovery)', fontsize=12, fontweight='bold')
-ax6.grid(True, alpha=0.3, axis='x')
-ax6.legend(['P10-P90 range', 'Median', 'Maximum'], loc='best', fontsize=8)
-
-plt.tight_layout()
-plt.savefig(BASE_DIR / 'analysis_output' / 'recovery_distribution_analysis.png', dpi=300, bbox_inches='tight')
-print("Saved: recovery_distribution_analysis.png")
-
 # Save detailed metrics
-county_dist.to_csv(BASE_DIR / 'analysis_output' / 'county_distribution_metrics.csv', index=False)
-print("Saved: county_distribution_metrics.csv")
+out_csv = BASE_DIR / 'analysis_output' / 'county_distribution_metrics.csv'
+out_csv.parent.mkdir(exist_ok=True)
+county_dist.to_csv(out_csv, index=False)
+print(f"Saved: {out_csv}")
 
 # Identify interesting county patterns
 print("\n" + "="*60)
@@ -263,12 +137,3 @@ print(county_dist.nlargest(5, 'rt_cv')[['fips', 'rt_cv', 'rt_mean', 'rt_std', 'c
 
 print("\nMost skewed counties (extreme tail risk):")
 print(county_dist.nlargest(5, 'rt_skew')[['fips', 'rt_skew', 'rt_median', 'rt_p99', 'frac_rt_extreme']])
-
-print("\nHighest tail dominance (P90/median):")
-print(county_dist.nlargest(5, 'tail_dominance')[['fips', 'tail_dominance', 'rt_median', 'rt_p90', 'capacity']])
-
-print("\nMost predictable (low CV, low skew):")
-predictable = county_dist[(county_dist['rt_cv'] < 1) & (county_dist['rt_skew'] < 1) & (county_dist['rt_mean'] > 0)]
-print(predictable.nsmallest(5, 'rt_cv')[['fips', 'rt_cv', 'rt_skew', 'rt_mean', 'capacity']])
-
-plt.close()

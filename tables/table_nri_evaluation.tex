@@ -1,0 +1,35 @@
+\begin{table}[htb!]
+\centering
+\caption{Evaluation of the recovery-potential model against the FEMA National Risk Index (NRI), over the analysis sample of 685 US Atlantic-coast counties with positive modelled risk, recovery potential and construction capacity. Panel~A compares the modelled hazard layer (expected annual units affected, EAUA; expected annual repair cost, EARC) with the NRI's independent, historically calibrated monetary risk. Panel~B reports rank correlations between the model's quantities and the NRI socio-economic layers (convergent and discriminant validity). Panel~C re-estimates the association with Social Vulnerability after controlling for exposure. Entries are Spearman rank coefficients; Panel~A also gives Pearson coefficients on $\log_{10}$-transformed values. All coefficients are significant at $p<0.01$ unless marked.}
+\label{tab:nri_evaluation}
+\begin{tabular}{lrrr}
+\hline
+\multicolumn{4}{l}{\textit{Panel A. Hazard layer: modelled physical risk vs independent monetary risk}}\\
+ & Spearman & Pearson (log) & $n$ \\
+\hline
+EAUA vs NRI hurricane (wind) EAL & +0.65 & +0.64 & 685 \\
+EAUA vs NRI coastal-flood EAL & +0.18 & +0.05 & 251 \\
+EAUA vs NRI wind + coastal-flood EAL & +0.63 & +0.62 & 685 \\
+EARC vs NRI hurricane building EAL & +0.64 & +0.65 & 685 \\
+EARC vs NRI hurricane (wind) EAL & +0.66 & +0.67 & 685 \\
+EARC vs NRI wind + coastal-flood EAL & +0.64 & +0.65 & 685 \\
+\hline
+\multicolumn{4}{l}{\textit{Panel B. Recovery layer vs NRI socio-economic indices (Spearman $r$)}}\\
+ & Community & Social & Hurricane \\
+ & Resilience & Vulnerability & EAL (exposure) \\
+\hline
+Construction capacity & +0.42 & $-$0.63 & +0.47 \\
+EARP (annual recovery potential) & $-$0.37 & +0.48 & +0.29 \\
+Median per-event recovery potential & $-$0.34 & +0.48 & +0.00$^{\dagger}$ \\
+\hline
+\multicolumn{4}{l}{\textit{Panel C. Association with Social Vulnerability, controlling for exposure (Spearman $r$)}}\\
+ & raw & partial & partial \\
+ & & (control EAUA) & (control wind EAL) \\
+\hline
+Construction capacity & $-$0.63 & $-$0.66 & $-$0.63 \\
+Median per-event recovery potential & +0.48 & +0.48 & +0.49 \\
+\hline
+\end{tabular}
+\\[2pt]
+{\footnotesize $^{\dagger}$ Not significant ($p>0.05$): per-event recovery potential is statistically independent of hazard exposure, unlike the annual metric.}
+\end{table}

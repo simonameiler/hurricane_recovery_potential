@@ -11,7 +11,7 @@ Disaster numbers are discovered from DisasterDeclarationsSummaries by
 declaration title and year, keeping only declarations with the Individual
 Assistance (IH) program, so no disaster number is hard-coded.
 
-Used by create_historical_tables.py for the damage-distribution comparison
+Used by notebooks/historical_analysis.ipynb for the damage-distribution comparison
 (the FEMA leg is skipped there if this file has not been generated).
 
 Run from the repo root or scripts/. Requires: requests, pandas, dbfread or

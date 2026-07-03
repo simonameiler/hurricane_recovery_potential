@@ -1,0 +1,3 @@
+event_index,event_name,stcode,ccode,fips,units_DS1_raw,units_DS1_scaled,units_DS2_raw,units_DS2_scaled,units_DS3_raw,units_DS3_scaled,units_DS4_raw,units_DS4_scaled,repair_cost_sum_raw,repair_cost_sum_scaled
+6,AL122005,01,003,01003,0,0,0,0,0,0,0,0,1486.4615261945341,1728.2210643213862
+6,AL122005,01,097,01097,33,33,0,0,0,0,0,0,97654.03354257996,113959.82601236679
