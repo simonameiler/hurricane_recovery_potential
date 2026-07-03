@@ -5,17 +5,24 @@
 
 # Results / logs / figures
 outputs/
-analysis_output/
+# analysis_output: ignore everything except the county-level metric CSVs that
+# the notebooks consume (small, committed for reproducibility)
+analysis_output/*
+!analysis_output/county_event_frequency_damage_metrics.csv
+!analysis_output/county_exposed_housing_units.csv
+!analysis_output/county_distribution_metrics.csv
+!analysis_output/earp_per_county.csv
+!analysis_output/median_vs_max_event_comparison.csv
 results/
 logs/
 figures/
 reports/
 impacts_out/
 data/exposure/
-data/hazard/
+# hazard: external inputs stay local; the small cached historical hazard is committed
+data/hazard/*
+!data/hazard/gori_historical.hdf5
 data/impact/
-data/impact_historical/
-data/recovery/
 data/recovery_potential/
 data/NRI_Table_Counties.csv 
 

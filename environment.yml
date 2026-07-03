@@ -12,6 +12,9 @@ dependencies:
   - matplotlib-base>=3.8
   - seaborn>=0.13
   - scikit-learn>=1.5
+  - jupyterlab>=4.0
+  - ipykernel
+  - dbfread
   - pip
   - pip:
     - climada>=6.0         # CLIMADA probabilistic risk model

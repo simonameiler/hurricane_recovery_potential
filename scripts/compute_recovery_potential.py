@@ -4,8 +4,7 @@ Compute Expected Annual Recovery Potential (EARP) per county.
 Loads all per-event pyrecodes recovery JSON files, weights each county's
 recovery time by the event frequency, and sums across events to produce
 EARP (months per year).  Writes analysis_output/earp_per_county.csv for
-consumption by create_manuscript_figures.py, create_bivariate_maps.py,
-and nri_discriminant_assessment.py.
+consumption by notebooks/probabilistic_analysis.ipynb.
 
 Run with:
   conda activate climada_env && python scripts/compute_recovery_potential.py
