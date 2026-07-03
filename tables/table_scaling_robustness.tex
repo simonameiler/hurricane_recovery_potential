@@ -1,0 +1,25 @@
+\begin{table}[htb!]
+\centering
+\caption{Insensitivity of the damage evaluation to the rain and surge
+scaling. Spearman rank correlation of county weighted units affected
+with the FEMA-verified housing damage, computed with wind-only (raw)
+and with multi-hazard-scaled damage, for the storms with rain and
+surge covariates. The detection shares of
+table~\ref{tab:damage_distribution} are identical for raw and scaled
+damage by construction, because the scaling is multiplicative on wind
+damage and cannot create damage in counties without wind damage.}
+\label{tab:scaling_robustness}
+\begin{tabular}{lrrrrr}
+\hline
+ & & \multicolumn{2}{c}{Wind-only (raw)} & \multicolumn{2}{c}{Scaled} \\
+Storm & $n$ & $r_s$ & $p$ & $r_s$ & $p$ \\
+\hline
+Katrina (2005) & 16 & $+0.34$ & 0.192 & $+0.34$ & 0.192 \\
+Harvey (2017) & 9 & $+0.80$ & 0.010 & $+0.80$ & 0.010 \\
+Irma (2017) & 4 & $-0.60$ & 0.400 & $-0.60$ & 0.400 \\
+Michael (2018) & 29 & $+0.72$ & $<0.001$ & $+0.75$ & $<0.001$ \\
+Laura (2020) & 12 & $+0.67$ & 0.017 & $+0.65$ & 0.022 \\
+Pooled (within-storm shares) & 70 & $+0.54$ & $<0.001$ & $+0.55$ & $<0.001$ \\
+\hline
+\end{tabular}
+\end{table}

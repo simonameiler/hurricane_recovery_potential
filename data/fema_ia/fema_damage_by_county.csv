@@ -1,0 +1,376 @@
+atcf_id,storm,fips,county,state,disaster_numbers,fema_total_damage,valid_registrations,coverage
+AL092012,Isaac,22003,Allen,LA,4080,60836.08,62.0,all_declared
+AL092012,Isaac,22005,Ascension,LA,4080,1971004.36,2034.0,all_declared
+AL092012,Isaac,22007,Assumption,LA,4080,839398.03,833.0,all_declared
+AL092012,Isaac,22033,East Baton Rouge,LA,4080,1175415.76,2383.0,all_declared
+AL092012,Isaac,22037,East Feliciana,LA,4080,210822.23,347.0,all_declared
+AL092012,Isaac,22047,Iberville,LA,4080,807071.4,807.0,all_declared
+AL092012,Isaac,22051,Jefferson,LA,4080,18552670.36,30133.0,all_declared
+AL092012,Isaac,22057,Lafourche,LA,4080,3754382.57,3044.0,all_declared
+AL092012,Isaac,22063,Livingston,LA,4080,9991826.62,3835.0,all_declared
+AL092012,Isaac,22067,Morehouse,LA,4080,34573.6,65.0,all_declared
+AL092012,Isaac,22071,Orleans,LA,4080,10403641.68,20635.0,all_declared
+AL092012,Isaac,22075,Plaquemines,LA,4080,32830399.7,4160.0,all_declared
+AL092012,Isaac,22077,Pointe Coupee,LA,4080,78947.96,193.0,all_declared
+AL092012,Isaac,22087,St. Bernard,LA,4080,2982650.33,4421.0,all_declared
+AL092012,Isaac,22089,St. Charles,LA,4080,2259843.82,3013.0,all_declared
+AL092012,Isaac,22091,St. Helena,LA,4080,460784.65,782.0,all_declared
+AL092012,Isaac,22093,St. James,LA,4080,1617271.2,1450.0,all_declared
+AL092012,Isaac,22095,St. John the Baptist,LA,4080,68468590.98,8237.0,all_declared
+AL092012,Isaac,22099,St. Martin,LA,4080,209664.04,253.0,all_declared
+AL092012,Isaac,22101,St. Mary,LA,4080,1747921.57,1560.0,all_declared
+AL092012,Isaac,22103,St. Tammany,LA,4080,16590064.18,9079.0,all_declared
+AL092012,Isaac,22105,Tangipahoa,LA,4080,10354343.12,6459.0,all_declared
+AL092012,Isaac,22109,Terrebonne,LA,4080,3198578.47,2674.0,all_declared
+AL092012,Isaac,22117,Washington,LA,4080,2625781.79,1895.0,all_declared
+AL092012,Isaac,22121,West Baton Rouge,LA,4080,210136.69,285.0,all_declared
+AL092012,Isaac,22125,West Feliciana,LA,4080,138644.74,140.0,all_declared
+AL092012,Isaac,28001,Adams,MS,4081,244724.04,354.0,all_declared
+AL092012,Isaac,28005,Amite,MS,4081,288655.52,444.0,all_declared
+AL092012,Isaac,28023,Clarke,MS,4081,197455.83,261.0,all_declared
+AL092012,Isaac,28029,Copiah,MS,4081,214751.66,195.0,all_declared
+AL092012,Isaac,28035,Forrest,MS,4081,344138.29,310.0,all_declared
+AL092012,Isaac,28037,Franklin,MS,4081,78489.28,172.0,all_declared
+AL092012,Isaac,28039,George,MS,4081,171143.5,320.0,all_declared
+AL092012,Isaac,28045,Hancock,MS,4081,2466982.86,1442.0,all_declared
+AL092012,Isaac,28047,Harrison,MS,4081,1907666.42,2473.0,all_declared
+AL092012,Isaac,28049,Hinds,MS,4081,141648.71,203.0,all_declared
+AL092012,Isaac,28059,Jackson,MS,4081,5913106.08,2834.0,all_declared
+AL092012,Isaac,28063,Jefferson,MS,4081,79474.58,228.0,all_declared
+AL092012,Isaac,28067,Jones,MS,4081,101801.67,83.0,all_declared
+AL092012,Isaac,28073,Lamar,MS,4081,80262.62,145.0,all_declared
+AL092012,Isaac,28085,Lincoln,MS,4081,266525.62,774.0,all_declared
+AL092012,Isaac,28091,Marion,MS,4081,553742.88,937.0,all_declared
+AL092012,Isaac,28109,Pearl River,MS,4081,3373117.14,1683.0,all_declared
+AL092012,Isaac,28113,Pike,MS,4081,1075794.4,1672.0,all_declared
+AL092012,Isaac,28131,Stone,MS,4081,365390.0,328.0,all_declared
+AL092012,Isaac,28147,Walthall,MS,4081,813839.88,975.0,all_declared
+AL092012,Isaac,28149,Warren,MS,4081,79025.88,143.0,all_declared
+AL092012,Isaac,28157,Wilkinson,MS,4081,121995.57,301.0,all_declared
+AL092016,Hermine,12017,Citrus,FL,4280,4361862.71,769.0,all_declared
+AL092016,Hermine,12029,Dixie,FL,4280,1370561.89,330.0,all_declared
+AL092016,Hermine,12053,Hernando,FL,4280,866814.75,259.0,all_declared
+AL092016,Hermine,12057,Hillsborough,FL,4280,159887.29,174.0,all_declared
+AL092016,Hermine,12073,Leon,FL,4280,574644.66,866.0,all_declared
+AL092016,Hermine,12075,Levy,FL,4280,902533.99,296.0,all_declared
+AL092016,Hermine,12081,Manatee,FL,4280,208462.19,116.0,all_declared
+AL092016,Hermine,12101,Pasco,FL,4280,1871145.66,664.0,all_declared
+AL092016,Hermine,12103,Pinellas,FL,4280,294991.21,411.0,all_declared
+AL092016,Hermine,12123,Taylor,FL,4280,889109.27,272.0,all_declared
+AL092016,Hermine,12129,Wakulla,FL,4280,75509.59,117.0,all_declared
+AL092017,Harvey,48007,Aransas,TX,4332,42012481.79,9309.0,all_declared
+AL092017,Harvey,48015,Austin,TX,4332,2251707.85,576.0,all_declared
+AL092017,Harvey,48021,Bastrop,TX,4332,977021.02,591.0,all_declared
+AL092017,Harvey,48025,Bee,TX,4332,859503.55,1595.0,all_declared
+AL092017,Harvey,48039,Brazoria,TX,4332,104940664.29,23647.0,all_declared
+AL092017,Harvey,48055,Caldwell,TX,4332,316855.8,215.0,all_declared
+AL092017,Harvey,48057,Calhoun,TX,4332,4204607.69,4021.0,all_declared
+AL092017,Harvey,48071,Chambers,TX,4332,30337426.44,4387.0,all_declared
+AL092017,Harvey,48089,Colorado,TX,4332,1603072.42,571.0,all_declared
+AL092017,Harvey,48123,DeWitt,TX,4332,1097877.16,1007.0,all_declared
+AL092017,Harvey,48149,Fayette,TX,4332,7381981.2,588.0,all_declared
+AL092017,Harvey,48157,Fort Bend,TX,4332,115484630.2,36583.0,all_declared
+AL092017,Harvey,48167,Galveston,TX,4332,151277386.3,23626.0,all_declared
+AL092017,Harvey,48175,Goliad,TX,4332,795890.42,901.0,all_declared
+AL092017,Harvey,48177,Gonzales,TX,4332,400824.55,437.0,all_declared
+AL092017,Harvey,48185,Grimes,TX,4332,798964.25,322.0,all_declared
+AL092017,Harvey,48199,Hardin,TX,4332,64765439.85,7064.0,all_declared
+AL092017,Harvey,48201,Harris,TX,4332,1040760177.99,183459.0,all_declared
+AL092017,Harvey,48239,Jackson,TX,4332,473918.62,1335.0,all_declared
+AL092017,Harvey,48241,Jasper,TX,4332,5276421.87,2881.0,all_declared
+AL092017,Harvey,48245,Jefferson,TX,4332,219999827.55,33376.0,all_declared
+AL092017,Harvey,48255,Karnes,TX,4332,277126.62,288.0,all_declared
+AL092017,Harvey,48273,Kleberg,TX,4332,294523.06,673.0,all_declared
+AL092017,Harvey,48285,Lavaca,TX,4332,163653.64,286.0,all_declared
+AL092017,Harvey,48287,Lee,TX,4332,513042.83,158.0,all_declared
+AL092017,Harvey,48291,Liberty,TX,4332,33988714.04,7326.0,all_declared
+AL092017,Harvey,48321,Matagorda,TX,4332,4645468.42,5487.0,all_declared
+AL092017,Harvey,48339,Montgomery,TX,4332,72116870.33,11396.0,all_declared
+AL092017,Harvey,48351,Newton,TX,4332,7338257.55,1644.0,all_declared
+AL092017,Harvey,48355,Nueces,TX,4332,16816094.83,26745.0,all_declared
+AL092017,Harvey,48361,Orange,TX,4332,173984833.81,18571.0,all_declared
+AL092017,Harvey,48373,Polk,TX,4332,3545987.77,1641.0,all_declared
+AL092017,Harvey,48391,Refugio,TX,4332,6643196.76,1975.0,all_declared
+AL092017,Harvey,48403,Sabine,TX,4332,153394.91,235.0,all_declared
+AL092017,Harvey,48407,San Jacinto,TX,4332,9832902.18,1940.0,all_declared
+AL092017,Harvey,48409,San Patricio,TX,4332,14452534.12,10535.0,all_declared
+AL092017,Harvey,48457,Tyler,TX,4332,2646533.72,1481.0,all_declared
+AL092017,Harvey,48469,Victoria,TX,4332,11001660.51,10775.0,all_declared
+AL092017,Harvey,48471,Walker,TX,4332,1587254.14,1128.0,all_declared
+AL092017,Harvey,48473,Waller,TX,4332,5520341.6,1381.0,all_declared
+AL092017,Harvey,48481,Wharton,TX,4332,20391086.11,3102.0,all_declared
+AL092021,Ida,22005,Ascension,LA,4611,15066854.1,18335.0,all_declared
+AL092021,Ida,22007,Assumption,LA,4611,5946532.18,3563.0,all_declared
+AL092021,Ida,22033,East Baton Rouge,LA,4611,12872439.06,35722.0,all_declared
+AL092021,Ida,22037,East Feliciana,LA,4611,2228685.08,2116.0,all_declared
+AL092021,Ida,22045,Iberia,LA,4611,1386355.75,3725.0,all_declared
+AL092021,Ida,22047,Iberville,LA,4611,2817523.99,2837.0,all_declared
+AL092021,Ida,22051,Jefferson,LA,4611,113592478.02,87919.0,all_declared
+AL092021,Ida,22057,Lafourche,LA,4611,118513505.43,25194.0,all_declared
+AL092021,Ida,22063,Livingston,LA,4611,24350374.84,24179.0,all_declared
+AL092021,Ida,22071,Orleans,LA,4611,62217830.74,57605.0,all_declared
+AL092021,Ida,22075,Plaquemines,LA,4611,12722415.0,5209.0,all_declared
+AL092021,Ida,22077,Pointe Coupee,LA,4611,752904.38,996.0,all_declared
+AL092021,Ida,22087,St. Bernard,LA,4611,8363635.85,8880.0,all_declared
+AL092021,Ida,22089,St. Charles,LA,4611,35824056.89,14381.0,all_declared
+AL092021,Ida,22091,St. Helena,LA,4611,7327157.74,3221.0,all_declared
+AL092021,Ida,22093,St. James,LA,4611,16652821.66,5294.0,all_declared
+AL092021,Ida,22095,St. John the Baptist,LA,4611,58731043.85,12072.0,all_declared
+AL092021,Ida,22099,St. Martin,LA,4611,649869.19,1751.0,all_declared
+AL092021,Ida,22101,St. Mary,LA,4611,4333524.76,3329.0,all_declared
+AL092021,Ida,22103,St. Tammany,LA,4611,28163188.85,46050.0,all_declared
+AL092021,Ida,22105,Tangipahoa,LA,4611,51629354.01,28771.0,all_declared
+AL092021,Ida,22109,Terrebonne,LA,4611,141406982.21,26431.0,all_declared
+AL092021,Ida,22117,Washington,LA,4611,6861645.79,6361.0,all_declared
+AL092021,Ida,22121,West Baton Rouge,LA,4611,946662.24,1649.0,all_declared
+AL092021,Ida,22125,West Feliciana,LA,4611,354837.03,618.0,all_declared
+AL092021,Ida,28005,Amite,MS,4626,676694.51,484.0,all_declared
+AL092021,Ida,28045,Hancock,MS,4626,1002589.31,287.0,all_declared
+AL092021,Ida,28047,Harrison,MS,4626,2656056.59,734.0,all_declared
+AL092021,Ida,28059,Jackson,MS,4626,1876348.97,652.0,all_declared
+AL092021,Ida,28109,Pearl River,MS,4626,581760.01,351.0,all_declared
+AL092021,Ida,28113,Pike,MS,4626,1717479.71,1382.0,all_declared
+AL092021,Ida,28147,Walthall,MS,4626,1177135.72,650.0,all_declared
+AL092021,Ida,28157,Wilkinson,MS,4626,161821.79,155.0,all_declared
+AL092022,Ian,12009,Brevard,FL,4673,6491675.25,6326.0,all_declared
+AL092022,Ian,12015,Charlotte,FL,4673,146278050.3,42524.0,all_declared
+AL092022,Ian,12021,Collier,FL,4673,67391399.29,17838.0,all_declared
+AL092022,Ian,12027,DeSoto,FL,4673,27835598.36,5480.0,all_declared
+AL092022,Ian,12035,Flagler,FL,4673,1685108.06,2222.0,all_declared
+AL092022,Ian,12043,Glades,FL,4673,565888.11,459.0,all_declared
+AL092022,Ian,12049,Hardee,FL,4673,10866506.77,2912.0,all_declared
+AL092022,Ian,12051,Hendry,FL,4673,960243.43,2295.0,all_declared
+AL092022,Ian,12055,Highlands,FL,4673,6737881.62,4966.0,all_declared
+AL092022,Ian,12057,Hillsborough,FL,4673,10741006.03,37608.0,all_declared
+AL092022,Ian,12069,Lake,FL,4673,3132266.4,4792.0,all_declared
+AL092022,Ian,12071,Lee,FL,4673,1064334197.48,125276.0,all_declared
+AL092022,Ian,12081,Manatee,FL,4673,10524506.36,13948.0,all_declared
+AL092022,Ian,12087,Monroe,FL,4673,4904706.24,933.0,all_declared
+AL092022,Ian,12093,Okeechobee,FL,4673,1365737.67,1239.0,all_declared
+AL092022,Ian,12095,Orange,FL,4673,40375874.57,37619.0,all_declared
+AL092022,Ian,12097,Osceola,FL,4673,14082690.65,15201.0,all_declared
+AL092022,Ian,12099,Palm Beach,FL,4673,1020365.63,15113.0,all_declared
+AL092022,Ian,12101,Pasco,FL,4673,1132409.4,3220.0,all_declared
+AL092022,Ian,12103,Pinellas,FL,4673,2691933.82,15201.0,all_declared
+AL092022,Ian,12105,Polk,FL,4673,21963038.34,33125.0,all_declared
+AL092022,Ian,12107,Putnam,FL,4673,1700333.77,1835.0,all_declared
+AL092022,Ian,12109,St. Johns,FL,4673,2694057.98,1859.0,all_declared
+AL092022,Ian,12115,Sarasota,FL,4673,102444785.36,40631.0,all_declared
+AL092022,Ian,12117,Seminole,FL,4673,17858463.2,15859.0,all_declared
+AL092022,Ian,12127,Volusia,FL,4673,96310469.8,37072.0,all_declared
+AL092022,Ian,45019,Charleston,SC,4677,702476.64,828.0,all_declared
+AL092022,Ian,45043,Georgetown,SC,4677,936667.89,547.0,all_declared
+AL092022,Ian,45051,Horry,SC,4677,1577979.3,1678.0,all_declared
+AL112017,Irma,12001,Alachua,FL,4337,3745567.84,9658.0,all_declared
+AL112017,Irma,12003,Baker,FL,4337,925550.6,1790.0,all_declared
+AL112017,Irma,12007,Bradford,FL,4337,2592077.32,2241.0,all_declared
+AL112017,Irma,12009,Brevard,FL,4337,16422517.42,35084.0,all_declared
+AL112017,Irma,12011,Broward,FL,4337,24724941.19,128778.0,all_declared
+AL112017,Irma,12015,Charlotte,FL,4337,2470530.5,8342.0,all_declared
+AL112017,Irma,12017,Citrus,FL,4337,1826483.5,8715.0,all_declared
+AL112017,Irma,12019,Clay,FL,4337,10621547.9,9668.0,all_declared
+AL112017,Irma,12021,Collier,FL,4337,20500577.9,39431.0,all_declared
+AL112017,Irma,12023,Columbia,FL,4337,1604416.3,4259.0,all_declared
+AL112017,Irma,12027,DeSoto,FL,4337,2749234.0,2516.0,all_declared
+AL112017,Irma,12029,Dixie,FL,4337,600229.4,1344.0,all_declared
+AL112017,Irma,12031,Duval,FL,4337,22464378.68,44836.0,all_declared
+AL112017,Irma,12035,Flagler,FL,4337,4742478.1,5476.0,all_declared
+AL112017,Irma,12041,Gilchrist,FL,4337,291017.0,1068.0,all_declared
+AL112017,Irma,12043,Glades,FL,4337,999429.9,1251.0,all_declared
+AL112017,Irma,12047,Hamilton,FL,4337,197484.8,447.0,all_declared
+AL112017,Irma,12049,Hardee,FL,4337,2511878.65,2461.0,all_declared
+AL112017,Irma,12051,Hendry,FL,4337,3651361.19,4980.0,all_declared
+AL112017,Irma,12053,Hernando,FL,4337,2771776.5,9055.0,all_declared
+AL112017,Irma,12055,Highlands,FL,4337,6893766.5,14989.0,all_declared
+AL112017,Irma,12057,Hillsborough,FL,4337,10160458.65,48309.0,all_declared
+AL112017,Irma,12061,Indian River,FL,4337,2525670.3,5980.0,all_declared
+AL112017,Irma,12067,Lafayette,FL,4337,88989.35,641.0,all_declared
+AL112017,Irma,12069,Lake,FL,4337,5658509.22,22669.0,all_declared
+AL112017,Irma,12071,Lee,FL,4337,26985038.01,64350.0,all_declared
+AL112017,Irma,12075,Levy,FL,4337,591259.52,2742.0,all_declared
+AL112017,Irma,12081,Manatee,FL,4337,3605750.0,14894.0,all_declared
+AL112017,Irma,12083,Marion,FL,4337,7410532.64,26894.0,all_declared
+AL112017,Irma,12085,Martin,FL,4337,1050179.7,4578.0,all_declared
+AL112017,Irma,12086,Miami-Dade,FL,4337,50795935.48,221357.0,all_declared
+AL112017,Irma,12087,Monroe,FL,4337,57457912.52,19444.0,all_declared
+AL112017,Irma,12089,Nassau,FL,4337,2139081.71,4292.0,all_declared
+AL112017,Irma,12093,Okeechobee,FL,4337,2035784.28,3469.0,all_declared
+AL112017,Irma,12095,Orange,FL,4337,15965945.92,68452.0,all_declared
+AL112017,Irma,12097,Osceola,FL,4337,7703591.16,19645.0,all_declared
+AL112017,Irma,12099,Palm Beach,FL,4337,10862927.38,69771.0,all_declared
+AL112017,Irma,12101,Pasco,FL,4337,6238245.27,24484.0,all_declared
+AL112017,Irma,12103,Pinellas,FL,4337,7236683.92,69755.0,all_declared
+AL112017,Irma,12105,Polk,FL,4337,22580813.86,55550.0,all_declared
+AL112017,Irma,12107,Putnam,FL,4337,4734383.15,8648.0,all_declared
+AL112017,Irma,12109,St. Johns,FL,4337,6075743.88,7804.0,all_declared
+AL112017,Irma,12111,St. Lucie,FL,4337,6961891.5,18097.0,all_declared
+AL112017,Irma,12115,Sarasota,FL,4337,2970653.9,16913.0,all_declared
+AL112017,Irma,12117,Seminole,FL,4337,6620947.41,27655.0,all_declared
+AL112017,Irma,12119,Sumter,FL,4337,1756999.7,4472.0,all_declared
+AL112017,Irma,12121,Suwannee,FL,4337,685096.4,3138.0,all_declared
+AL112017,Irma,12125,Union,FL,4337,295790.6,748.0,all_declared
+AL112017,Irma,12127,Volusia,FL,4337,10095880.78,31908.0,all_declared
+AL112017,Irma,13039,Camden,GA,4338,1765125.9,2460.0,all_declared
+AL112017,Irma,13049,Charlton,GA,4338,328623.3,481.0,all_declared
+AL112017,Irma,13051,Chatham,GA,4338,2212894.29,6869.0,all_declared
+AL112017,Irma,13069,Coffee,GA,4338,290150.89,490.0,all_declared
+AL112017,Irma,13127,Glynn,GA,4338,3341713.52,4684.0,all_declared
+AL112017,Irma,13179,Liberty,GA,4338,538777.16,751.0,all_declared
+AL112017,Irma,13191,McIntosh,GA,4338,564651.5,1024.0,all_declared
+AL122005,Katrina,01003,Baldwin,AL,1605,9025949.78,5402.0,all_declared
+AL122005,Katrina,01023,Choctaw,AL,1605,1743963.95,2193.0,all_declared
+AL122005,Katrina,01025,Clarke,AL,1605,2231231.24,1885.0,all_declared
+AL122005,Katrina,01061,Geneva,AL,1605,0.0,1.0,all_declared
+AL122005,Katrina,01063,Greene,AL,1605,572021.92,1099.0,all_declared
+AL122005,Katrina,01065,Hale,AL,1605,468628.51,578.0,all_declared
+AL122005,Katrina,01075,Lamar,AL,1605,0.0,1.0,all_declared
+AL122005,Katrina,01091,Marengo,AL,1605,474871.59,631.0,all_declared
+AL122005,Katrina,01097,Mobile,AL,1605,101425961.44,54157.0,all_declared
+AL122005,Katrina,01101,Montgomery,AL,1605,0.0,2.0,all_declared
+AL122005,Katrina,01107,Pickens,AL,1605,774305.36,1130.0,all_declared
+AL122005,Katrina,01119,Sumter,AL,1605,1151265.53,1423.0,all_declared
+AL122005,Katrina,01125,Tuscaloosa,AL,1605,497085.93,541.0,all_declared
+AL122005,Katrina,01129,Washington,AL,1605,3979619.14,2754.0,all_declared
+AL122005,Katrina,22001,Acadia,LA,1603,1557309.94,343.0,all_declared
+AL122005,Katrina,22005,Ascension,LA,1603,5303853.93,6758.0,all_declared
+AL122005,Katrina,22007,Assumption,LA,1603,3474944.76,2727.0,all_declared
+AL122005,Katrina,22013,Bienville,LA,1603,0.0,1.0,all_declared
+AL122005,Katrina,22019,Calcasieu,LA,1603,603584.43,505.0,all_declared
+AL122005,Katrina,22021,Caldwell,LA,1603,0.0,1.0,all_declared
+AL122005,Katrina,22023,Cameron,LA,1603,625150.53,54.0,all_declared
+AL122005,Katrina,22029,Concordia,LA,1603,0.0,1.0,all_declared
+AL122005,Katrina,22033,East Baton Rouge,LA,1603,10527310.63,21290.0,all_declared
+AL122005,Katrina,22037,East Feliciana,LA,1603,2128263.78,2283.0,all_declared
+AL122005,Katrina,22041,Franklin,LA,1603,0.0,1.0,all_declared
+AL122005,Katrina,22045,Iberia,LA,1603,4044604.79,568.0,all_declared
+AL122005,Katrina,22047,Iberville,LA,1603,3118314.18,3018.0,all_declared
+AL122005,Katrina,22049,Jackson,LA,1603,0.0,1.0,all_declared
+AL122005,Katrina,22051,Jefferson,LA,1603,657399076.94,132118.0,all_declared
+AL122005,Katrina,22053,Jefferson Davis,LA,1603,51219.73,61.0,all_declared
+AL122005,Katrina,22055,Lafayette,LA,1603,569310.88,446.0,all_declared
+AL122005,Katrina,22057,Lafourche,LA,1603,16996743.33,13702.0,all_declared
+AL122005,Katrina,22063,Livingston,LA,1603,12053092.03,13272.0,all_declared
+AL122005,Katrina,22071,Orleans,LA,1603,1642386265.98,110978.0,all_declared
+AL122005,Katrina,22075,Plaquemines,LA,1603,355265363.01,9645.0,all_declared
+AL122005,Katrina,22077,Pointe Coupee,LA,1603,1042216.4,1143.0,all_declared
+AL122005,Katrina,22085,Sabine,LA,1603,0.0,1.0,all_declared
+AL122005,Katrina,22087,St. Bernard,LA,1603,919083381.9,22445.0,all_declared
+AL122005,Katrina,22089,St. Charles,LA,1603,15074523.85,15528.0,all_declared
+AL122005,Katrina,22091,St. Helena,LA,1603,2342386.49,1889.0,all_declared
+AL122005,Katrina,22093,St. James,LA,1603,4780730.97,4458.0,all_declared
+AL122005,Katrina,22095,St. John the Baptist,LA,1603,12719356.6,12782.0,all_declared
+AL122005,Katrina,22099,St. Martin,LA,1603,407518.7,360.0,all_declared
+AL122005,Katrina,22101,St. Mary,LA,1603,2623961.8,2066.0,all_declared
+AL122005,Katrina,22103,St. Tammany,LA,1603,383051498.16,74202.0,all_declared
+AL122005,Katrina,22105,Tangipahoa,LA,1603,33347780.61,27466.0,all_declared
+AL122005,Katrina,22109,Terrebonne,LA,1603,18532285.99,14017.0,all_declared
+AL122005,Katrina,22113,Vermilion,LA,1603,266454.2,91.0,all_declared
+AL122005,Katrina,22117,Washington,LA,1603,35733785.41,14635.0,all_declared
+AL122005,Katrina,22121,West Baton Rouge,LA,1603,994180.51,1217.0,all_declared
+AL122005,Katrina,22125,West Feliciana,LA,1603,334230.76,481.0,all_declared
+AL122005,Katrina,28001,Adams,MS,1604,1538660.47,2647.0,all_declared
+AL122005,Katrina,28005,Amite,MS,1604,2127814.6,2450.0,all_declared
+AL122005,Katrina,28007,Attala,MS,1604,570780.89,895.0,all_declared
+AL122005,Katrina,28015,Carroll,MS,1604,0.0,1.0,all_declared
+AL122005,Katrina,28019,Choctaw,MS,1604,156132.57,243.0,all_declared
+AL122005,Katrina,28021,Claiborne,MS,1604,999011.9,1502.0,all_declared
+AL122005,Katrina,28023,Clarke,MS,1604,5195273.99,3895.0,all_declared
+AL122005,Katrina,28029,Copiah,MS,1604,3206569.66,4396.0,all_declared
+AL122005,Katrina,28031,Covington,MS,1604,9469931.13,5378.0,all_declared
+AL122005,Katrina,28035,Forrest,MS,1604,28329400.56,16960.0,all_declared
+AL122005,Katrina,28037,Franklin,MS,1604,735477.41,1136.0,all_declared
+AL122005,Katrina,28039,George,MS,1604,13808476.44,6100.0,all_declared
+AL122005,Katrina,28041,Greene,MS,1604,5255404.32,2722.0,all_declared
+AL122005,Katrina,28045,Hancock,MS,1604,610675559.0,16809.0,all_declared
+AL122005,Katrina,28047,Harrison,MS,1604,844395664.56,51864.0,all_declared
+AL122005,Katrina,28049,Hinds,MS,1604,7579881.33,22371.0,all_declared
+AL122005,Katrina,28051,Holmes,MS,1604,1168608.18,1322.0,all_declared
+AL122005,Katrina,28053,Humphreys,MS,1604,354351.91,351.0,all_declared
+AL122005,Katrina,28055,Issaquena,MS,1604,0.0,1.0,all_declared
+AL122005,Katrina,28059,Jackson,MS,1604,443564217.22,35337.0,all_declared
+AL122005,Katrina,28061,Jasper,MS,1604,6953792.17,4799.0,all_declared
+AL122005,Katrina,28063,Jefferson,MS,1604,1624644.21,1232.0,all_declared
+AL122005,Katrina,28065,Jefferson Davis,MS,1604,4167720.99,3271.0,all_declared
+AL122005,Katrina,28067,Jones,MS,1604,28884366.14,16257.0,all_declared
+AL122005,Katrina,28069,Kemper,MS,1604,1120372.42,1251.0,all_declared
+AL122005,Katrina,28071,Lafayette,MS,1604,0.0,2.0,all_declared
+AL122005,Katrina,28073,Lamar,MS,1604,17934372.6,9755.0,all_declared
+AL122005,Katrina,28075,Lauderdale,MS,1604,9111254.61,9442.0,all_declared
+AL122005,Katrina,28077,Lawrence,MS,1604,5610176.8,4245.0,all_declared
+AL122005,Katrina,28079,Leake,MS,1604,872852.48,1635.0,all_declared
+AL122005,Katrina,28085,Lincoln,MS,1604,4475771.58,5574.0,all_declared
+AL122005,Katrina,28087,Lowndes,MS,1604,695369.04,1605.0,all_declared
+AL122005,Katrina,28089,Madison,MS,1604,1448199.73,3959.0,all_declared
+AL122005,Katrina,28091,Marion,MS,1604,11474449.44,7169.0,all_declared
+AL122005,Katrina,28097,Montgomery,MS,1604,0.0,1.0,all_declared
+AL122005,Katrina,28099,Neshoba,MS,1604,1105123.4,2108.0,all_declared
+AL122005,Katrina,28101,Newton,MS,1604,2351381.64,3177.0,all_declared
+AL122005,Katrina,28103,Noxubee,MS,1604,1318846.09,1626.0,all_declared
+AL122005,Katrina,28105,Oktibbeha,MS,1604,1277453.92,874.0,all_declared
+AL122005,Katrina,28109,Pearl River,MS,1604,39559526.76,16052.0,all_declared
+AL122005,Katrina,28111,Perry,MS,1604,6602405.68,3288.0,all_declared
+AL122005,Katrina,28113,Pike,MS,1604,8210221.31,8680.0,all_declared
+AL122005,Katrina,28121,Rankin,MS,1604,4323057.26,7784.0,all_declared
+AL122005,Katrina,28123,Scott,MS,1604,2310247.21,2460.0,all_declared
+AL122005,Katrina,28127,Simpson,MS,1604,4395026.45,5208.0,all_declared
+AL122005,Katrina,28129,Smith,MS,1604,3455072.74,3067.0,all_declared
+AL122005,Katrina,28131,Stone,MS,1604,17289400.57,4700.0,all_declared
+AL122005,Katrina,28147,Walthall,MS,1604,20559549.1,4397.0,all_declared
+AL122005,Katrina,28149,Warren,MS,1604,1531730.32,3175.0,all_declared
+AL122005,Katrina,28153,Wayne,MS,1604,5766473.61,4677.0,all_declared
+AL122005,Katrina,28157,Wilkinson,MS,1604,942131.26,1496.0,all_declared
+AL122005,Katrina,28159,Winston,MS,1604,474902.16,1056.0,all_declared
+AL122005,Katrina,28163,Yazoo,MS,1604,1165070.97,1748.0,all_declared
+AL132020,Laura,22001,Acadia,LA,4559,3054779.96,1882.0,all_declared
+AL132020,Laura,22003,Allen,LA,4559,7751694.67,4144.0,all_declared
+AL132020,Laura,22011,Beauregard,LA,4559,14900777.34,8373.0,all_declared
+AL132020,Laura,22017,Caddo,LA,4559,2952771.03,1318.0,all_declared
+AL132020,Laura,22019,Calcasieu,LA,4559,114184167.87,49360.0,all_declared
+AL132020,Laura,22023,Cameron,LA,4559,23347707.62,2729.0,all_declared
+AL132020,Laura,22043,Grant,LA,4559,4236589.97,2574.0,all_declared
+AL132020,Laura,22049,Jackson,LA,4559,875978.68,934.0,all_declared
+AL132020,Laura,22053,Jefferson Davis,LA,4559,7636916.68,4862.0,all_declared
+AL132020,Laura,22059,LaSalle,LA,4559,422475.16,1160.0,all_declared
+AL132020,Laura,22061,Lincoln,LA,4559,1335230.67,1277.0,all_declared
+AL132020,Laura,22067,Morehouse,LA,4559,1548603.42,681.0,all_declared
+AL132020,Laura,22069,Natchitoches,LA,4559,2641506.73,2840.0,all_declared
+AL132020,Laura,22073,Ouachita,LA,4559,4327009.65,4497.0,all_declared
+AL132020,Laura,22079,Rapides,LA,4559,11761923.36,9623.0,all_declared
+AL132020,Laura,22085,Sabine,LA,4559,1861716.7,2267.0,all_declared
+AL132020,Laura,22097,St. Landry,LA,4559,2335195.48,1161.0,all_declared
+AL132020,Laura,22111,Union,LA,4559,993457.46,1412.0,all_declared
+AL132020,Laura,22113,Vermilion,LA,4559,2863095.3,1536.0,all_declared
+AL132020,Laura,22115,Vernon,LA,4559,6017873.28,5662.0,all_declared
+AL132020,Laura,22127,Winn,LA,4559,1538662.49,1456.0,all_declared
+AL142018,Michael,12005,Bay,FL,4399,118798365.85,33917.0,all_declared
+AL142018,Michael,12013,Calhoun,FL,4399,11497696.3,3223.0,all_declared
+AL142018,Michael,12037,Franklin,FL,4399,2567303.8,1245.0,all_declared
+AL142018,Michael,12039,Gadsden,FL,4399,4966152.25,4999.0,all_declared
+AL142018,Michael,12045,Gulf,FL,4399,22826883.03,4067.0,all_declared
+AL142018,Michael,12059,Holmes,FL,4399,593853.12,961.0,all_declared
+AL142018,Michael,12063,Jackson,FL,4399,19030980.58,8484.0,all_declared
+AL142018,Michael,12073,Leon,FL,4399,811718.58,2851.0,all_declared
+AL142018,Michael,12077,Liberty,FL,4399,1617575.28,1149.0,all_declared
+AL142018,Michael,12123,Taylor,FL,4399,214163.63,119.0,all_declared
+AL142018,Michael,12129,Wakulla,FL,4399,2433949.14,989.0,all_declared
+AL142018,Michael,12133,Washington,FL,4399,3245467.11,2460.0,all_declared
+AL142018,Michael,13007,Baker,GA,4400,367414.69,505.0,all_declared
+AL142018,Michael,13037,Calhoun,GA,4400,329604.61,474.0,all_declared
+AL142018,Michael,13061,Clay,GA,4400,363961.12,266.0,all_declared
+AL142018,Michael,13081,Crisp,GA,4400,506434.61,973.0,all_declared
+AL142018,Michael,13087,Decatur,GA,4400,2171537.66,2927.0,all_declared
+AL142018,Michael,13095,Dougherty,GA,4400,1862661.94,3985.0,all_declared
+AL142018,Michael,13099,Early,GA,4400,1144180.09,1360.0,all_declared
+AL142018,Michael,13131,Grady,GA,4400,535539.95,1169.0,all_declared
+AL142018,Michael,13175,Laurens,GA,4400,233052.87,336.0,all_declared
+AL142018,Michael,13177,Lee,GA,4400,798078.21,1299.0,all_declared
+AL142018,Michael,13201,Miller,GA,4400,1416234.09,1035.0,all_declared
+AL142018,Michael,13205,Mitchell,GA,4400,1246972.63,1977.0,all_declared
+AL142018,Michael,13243,Randolph,GA,4400,391945.5,580.0,all_declared
+AL142018,Michael,13253,Seminole,GA,4400,2635778.59,1770.0,all_declared
+AL142018,Michael,13261,Sumter,GA,4400,214749.88,481.0,all_declared
+AL142018,Michael,13273,Terrell,GA,4400,379786.98,722.0,all_declared
+AL142018,Michael,13275,Thomas,GA,4400,245779.04,712.0,all_declared
+AL142018,Michael,13277,Tift,GA,4400,260274.85,543.0,all_declared
+AL142018,Michael,13287,Turner,GA,4400,263647.19,461.0,all_declared
+AL142018,Michael,13321,Worth,GA,4400,925578.24,1041.0,all_declared
