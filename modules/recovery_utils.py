@@ -1,4 +1,9 @@
-"""Recovery-potential simulation (pyrecodes light).
+"""Recovery-burden simulation (pyrecodes light).
+
+Manuscript terminology: the quantity computed here is the recovery burden
+B_{e,c} (months of normal construction activity); the legacy name
+"recovery potential" is retained in file and column names
+(recovery_potential_months).
 
 Analytical stand-in for a full pyrecodes resource-constrained recovery
 simulation. For every county-event pair:
@@ -9,7 +14,7 @@ where demand is the HAZUS unit-month repair demand summed over damage states
 (demand = sum_k units_DS{k}_scaled * tau_k, tau = {DS1: 1, DS2: 1, DS3: 3,
 DS4: 6} months), the floor is the longest tau among the damage states present,
 and capacity is the county's average monthly building-permit count. Counties
-with zero or missing permit capacity get NaN recovery potential.
+with zero or missing permit capacity get NaN recovery burden.
 
 Used by scripts/run_pyrecodes_light.py (probabilistic event set) and by
 notebooks/historical_analysis.ipynb (historical storms).

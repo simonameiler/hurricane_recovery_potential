@@ -1,10 +1,15 @@
 """
-Compute Expected Annual Recovery Potential (EARP) per county.
+Compute Expected Annual Recovery Burden (EARB) per county.
 
-Loads all per-event pyrecodes recovery JSON files, weights each county's
-recovery time by the event frequency, and sums across events to produce
-EARP (months per year).  Writes analysis_output/earp_per_county.csv for
-consumption by notebooks/probabilistic_analysis.ipynb.
+Manuscript terminology: EARB (expected annual recovery burden,
+capacity-equivalent months per year). Legacy identifiers (EARP,
+earp_months_per_year, recovery_potential_months) are retained in file and
+column names.
+
+Loads all per-event recovery records, weights each county's recovery burden
+by the event frequency, and sums across events to produce EARB (months per
+year).  Writes analysis_output/earp_per_county.csv for consumption by
+notebooks/probabilistic_analysis.ipynb.
 
 Run with:
   conda activate climada_env && python scripts/compute_recovery_potential.py

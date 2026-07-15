@@ -2,9 +2,15 @@
 """
 Compare median vs maximum event impacts per county.
 
-Computes, for every county, the median and the maximum event (by weighted
-damage units) across the probabilistic event set, together with the recovery
-potential of those events, and writes the comparison table
+Computes, for every county, the median and the maximum event (by repair
+demand in weighted units affected, WUA) across the probabilistic event set,
+together with the recovery burden of those events, and writes the comparison
+table
+
+Following the manuscript definition, event-level (median) metrics are computed
+over damaging events only, i.e. events with non-zero repair demand
+(D_{e,c} > 0). Zero-demand footprint events are excluded before taking
+medians.
 
     analysis_output/median_vs_max_event_comparison.csv
 
@@ -60,8 +66,8 @@ def load_event_data():
 
 
 def load_recovery_data():
-    """Load per-event recovery potential data."""
-    print("\n2. Loading recovery potential data...")
+    """Load per-event recovery burden data (column names retain the legacy identifier recovery_potential_months)."""
+    print("\n2. Loading recovery burden data...")
 
     recovery_csv = BASE_DIR / "data" / "recovery" / "recovery_potential.csv"
     recovery_df = pd.read_csv(recovery_csv, dtype={"fips": str})
@@ -106,12 +112,24 @@ def compute_median_event_metrics(events_df, recovery_df, capacity_df):
         events_df['units_DS4_scaled'] * RECOVERY_WEIGHTS['DS4']
     )
     
-    # Compute median weighted damage per county
-    median_damage = events_df.groupby('fips')['weighted_damage'].median().reset_index()
+    # Damaging events only (manuscript definition: D_{e,c} > 0);
+    # zero-demand footprint events are excluded before taking medians.
+    damaging = events_df[events_df['weighted_damage'] > 0]
+    n_dropped = len(events_df) - len(damaging)
+    print(f"Restricting to damaging events (D > 0): "
+          f"{len(damaging)} of {len(events_df)} county-event records kept "
+          f"({n_dropped} zero-demand records excluded)")
+
+    # Compute median repair demand (WUA) per county over damaging events
+    median_damage = damaging.groupby('fips')['weighted_damage'].median().reset_index()
     median_damage.columns = ['fips', 'median_weighted_damage']
-    
-    # Compute median recovery time per county
-    median_recovery = recovery_df.groupby('fips')['recovery_potential [months]'].median().reset_index()
+
+    # Compute median recovery burden per county over damaging events.
+    # Recovery burden is 0 if and only if repair demand is 0 (the lower bound
+    # in Eq. 4 guarantees B >= 1 month whenever any units are damaged), so
+    # filtering on burden > 0 is equivalent to D_{e,c} > 0.
+    recovery_damaging = recovery_df[recovery_df['recovery_potential [months]'] > 0]
+    median_recovery = recovery_damaging.groupby('fips')['recovery_potential [months]'].median().reset_index()
     median_recovery.columns = ['fips', 'median_recovery_months']
     
     # Merge with capacity
@@ -127,7 +145,7 @@ def compute_median_event_metrics(events_df, recovery_df, capacity_df):
     
     print(f"Counties with median event data: {len(median_metrics)}")
     print(f"  Median weighted damage range: {median_metrics['median_weighted_damage'].min():.1f} to {median_metrics['median_weighted_damage'].max():.1f}")
-    print(f"  Median recovery range: {median_metrics['median_recovery_months'].min():.2f} to {median_metrics['median_recovery_months'].max():.1f} months")
+    print(f"  Median recovery-burden range: {median_metrics['median_recovery_months'].min():.2f} to {median_metrics['median_recovery_months'].max():.1f} months")
     
     return median_metrics
 
@@ -182,7 +200,7 @@ def compute_max_event_metrics(events_df, recovery_df, capacity_df):
     
     print(f"Counties with max event data: {len(max_metrics)}")
     print(f"  Max weighted damage range: {max_metrics['max_weighted_damage'].min():.1f} to {max_metrics['max_weighted_damage'].max():.1f}")
-    print(f"  Max recovery range: {max_metrics['max_recovery_months'].min():.2f} to {max_metrics['max_recovery_months'].max():.1f} months")
+    print(f"  Max-event recovery-burden range: {max_metrics['max_recovery_months'].min():.2f} to {max_metrics['max_recovery_months'].max():.1f} months")
     
     return max_metrics
 

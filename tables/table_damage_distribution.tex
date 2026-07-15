@@ -1,35 +1,30 @@
 \begin{table}[htb!]
 \centering
-\caption{Evaluation of the modelled damage distribution against
-FEMA-verified housing damage (primary) and the Huang et al.\ (2025)
-building sample (secondary). For each storm, the scaled weighted units
-affected (WUA) per county is rank-correlated (Spearman $r_s$, exact
-two-sided $p$) with the FEMA-verified real property damage of owner
-households from the OpenFEMA Individual Assistance records, over the
-counties present in both sources ($n$); correlations are shown for
-$n \geq 4$. Detection is the share of the storm's total FEMA-verified
-damage, summed over all declared counties, that falls in counties with
-modelled damage. The Huang columns repeat the comparison against the
-number of assessed damaged buildings per county. The pooled row
-correlates within-storm shares across all matched county-storm pairs.
-Hermine produced no modelled damage (detection 0\%). Nate is not part
-of the analysis (no reconstructed wind field).}
+\caption{Evaluation of the modeled damage distribution against
+FEMA-verified housing damage. For each storm, scaled weighted units
+affected (WUA) are rank-correlated with FEMA-verified real property
+damage across counties present in both sources. Detection is the share
+of the storm's total FEMA-verified damage, summed over all declared
+counties, that falls in counties with non-zero modeled damage.
+Correlations are Spearman $r_s$ with exact two-sided $p$-values and are
+shown for $n \geq 4$. The pooled row correlates within-storm shares
+across all matched county--storm pairs. Hermine produced no modeled
+damage.}
 \label{tab:damage_distribution}
-\begin{tabular}{lrrrrrrr}
+\begin{tabular}{lrrrr}
 \hline
- & \multicolumn{4}{c}{FEMA IA verified damage} & \multicolumn{3}{c}{Huang et al.\ building sample} \\
-Storm & $n$ & $r_s$ & $p$ & Detection & $n$ & $r_s$ & $p$ \\
+Storm & $n$ & $r_s$ & $p$ & Detection \\
 \hline
-Katrina (2005) & 16 & $+0.34$ & 0.192 & 95\% & -- & -- & -- \\
-Isaac (2012) & 1 & -- & -- & 16\% & 1 & -- & -- \\
-Hermine (2016) & -- & -- & -- & 0\% & -- & -- & -- \\
-Harvey (2017) & 9 & $+0.80$ & 0.010 & 4\% & 6 & $-0.03$ & 0.957 \\
-Irma (2017) & 4 & $-0.60$ & 0.400 & 37\% & 4 & $-0.40$ & 0.600 \\
-Michael (2018) & 29 & $+0.75$ & $<0.001$ & 99\% & 8 & $+0.93$ & $<0.001$ \\
-Laura (2020) & 12 & $+0.65$ & 0.022 & 92\% & 7 & $+0.82$ & 0.025 \\
-Ida (2021) & 18 & $+0.40$ & 0.097 & 96\% & -- & -- & -- \\
-Ian (2022) & 8 & $+0.81$ & 0.015 & 82\% & -- & -- & -- \\
-Pooled (within-storm shares) & 96 & $+0.56$ & $<0.001$ & -- & 25 & $+0.34$ & 0.101 \\
+Katrina (2005) & 16 & $+0.34$ & 0.192 & 95\% \\
+Isaac (2012) & 1 & -- & -- & 16\% \\
+Hermine (2016) & -- & -- & -- & 0\% \\
+Harvey (2017) & 9 & $+0.80$ & 0.010 & 4\% \\
+Irma (2017) & 4 & $-0.60$ & 0.400 & 37\% \\
+Michael (2018) & 29 & $+0.75$ & $<0.001$ & 99\% \\
+Laura (2020) & 12 & $+0.65$ & 0.022 & 92\% \\
+Ida (2021) & 18 & $+0.40$ & 0.097 & 96\% \\
+Ian (2022) & 8 & $+0.81$ & 0.015 & 82\% \\
+Pooled (within-storm shares) & 96 & $+0.56$ & $<0.001$ & -- \\
 \hline
 \end{tabular}
 \end{table}

@@ -2,9 +2,16 @@
 Analyze distributions of recovery times, impacts, and capacity
 
 Computes per-county distribution statistics (mean, percentiles, skewness,
-coefficient of variation) of recovery times and weighted damage across the
+coefficient of variation) of recovery burden and repair demand across the
 probabilistic event set, and writes analysis_output/county_distribution_metrics.csv
 (consumed by notebooks/probabilistic_analysis.ipynb, skewness map).
+
+Note: statistics here are computed over ALL footprint events, matching the
+manuscript's skewness definition (distribution of weighted units affected
+across all TCs in each county). The manuscript's event-level MEDIAN metrics
+(damaging events only, D_{e,c} > 0) come from compare_median_vs_max_events.py;
+the rt_median / wd_median columns written here include zero-demand events and
+are not used in any manuscript display item.
 """
 
 import pandas as pd
