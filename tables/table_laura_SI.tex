@@ -1,36 +1,40 @@
 \begin{table}[htb!]
 \centering
-\caption{All counties with modelled damage from Hurricane Laura (2020),
-sorted by scaled weighted units affected (WUA). Raw WUA uses wind-only
-damage; scaled WUA includes the rain and surge scaling. Repair cost is the
-scaled residential structural repair cost. Counties with zero permit
-capacity have undefined recovery potential (--).}
+\caption{All counties with modeled damage from Hurricane Laura (2020),
+sorted by scaled repair demand in weighted units affected (WUA). Raw WUA
+uses wind-only damage; scaled WUA includes the rain and surge scaling.
+Recovery burden is the modeled repair workload expressed in months of
+normal construction activity; higher values indicate greater repair demand
+relative to baseline construction capacity. These values should be
+interpreted as relative indicators, not calibrated estimates of actual
+recovery duration. Counties with zero permit capacity have undefined
+recovery burden (--).}
 \label{tab:laura_counties_SI}
-\begin{tabular}{llrrrrr}
+\begin{tabular}{llrrrr}
 \hline
-County & State & WUA & WUA & Repair cost & Capacity & Recovery \\
- & & (scaled) & (raw) & (million USD) & (permits/mo) & (months) \\
+County & State & WUA & WUA & Capacity & Recovery burden \\
+ & & (scaled) & (raw) & (permits/mo) & (months) \\
 \hline
-Calcasieu & LA & 43,859 & 42,530 & 657.7 & 108.2 & 405 \\
-Beauregard & LA & 19,746 & 14,934 & 224.8 & 6.9 & 2,855 \\
-Rapides & LA & 7,561 & 7,561 & 83.4 & 19.9 & 380 \\
-Sabine & TX & 7,182 & 5,538 & 40.0 & 0.0 & -- \\
-Vernon & LA & 7,168 & 7,168 & 47.3 & 2.2 & 3,308 \\
-Sabine & LA & 6,320 & 6,320 & 42.3 & 4.1 & 1,548 \\
-Allen & LA & 5,464 & 4,108 & 172.5 & 3.8 & 1,425 \\
-Cameron & LA & 4,886 & 4,886 & 109.3 & 2.2 & 2,172 \\
-Orange & TX & 4,293 & 4,293 & 22.2 & 19.6 & 219 \\
-Newton & TX & 4,114 & 3,631 & 50.2 & 0.0 & -- \\
-Grant & LA & 3,146 & 3,146 & 19.8 & 0.4 & 7,550 \\
-Natchitoches & LA & 1,742 & 1,742 & 5.5 & 7.9 & 220 \\
-Jefferson Davis & LA & 1,711 & 1,444 & 48.2 & 5.8 & 298 \\
-Winn & LA & 1,036 & 1,036 & 10.0 & 0.1 & 12,432 \\
-De Soto & LA & 162 & 162 & 2.1 & 9.4 & 17 \\
-Shelby & TX & 87 & 87 & 0.4 & 0.1 & 1,044 \\
-Red River & LA & 31 & 31 & 0.5 & 0.4 & 74 \\
-Jasper & TX & 18 & 18 & 0.4 & 3.8 & 5 \\
-Evangeline & LA & 3 & 3 & 0.0 & 2.3 & 1 \\
-Acadia & LA & 1 & 1 & 0.0 & 11.4 & 1 \\
+Calcasieu & LA & 43,859 & 42,530 & 108.2 & 405 \\
+Beauregard & LA & 19,746 & 14,934 & 6.9 & 2,855 \\
+Rapides & LA & 7,561 & 7,561 & 19.9 & 380 \\
+Sabine & TX & 7,182 & 5,538 & 0.0 & -- \\
+Vernon & LA & 7,168 & 7,168 & 2.2 & 3,308 \\
+Sabine & LA & 6,320 & 6,320 & 4.1 & 1,548 \\
+Allen & LA & 5,464 & 4,108 & 3.8 & 1,425 \\
+Cameron & LA & 4,886 & 4,886 & 2.2 & 2,172 \\
+Orange & TX & 4,293 & 4,293 & 19.6 & 219 \\
+Newton & TX & 4,114 & 3,631 & 0.0 & -- \\
+Grant & LA & 3,146 & 3,146 & 0.4 & 7,550 \\
+Natchitoches & LA & 1,742 & 1,742 & 7.9 & 220 \\
+Jefferson Davis & LA & 1,711 & 1,444 & 5.8 & 298 \\
+Winn & LA & 1,036 & 1,036 & 0.1 & 12,432 \\
+De Soto & LA & 162 & 162 & 9.4 & 17 \\
+Shelby & TX & 87 & 87 & 0.1 & 1,044 \\
+Red River & LA & 31 & 31 & 0.4 & 74 \\
+Jasper & TX & 18 & 18 & 3.8 & 5 \\
+Evangeline & LA & 3 & 3 & 2.3 & 1 \\
+Acadia & LA & 1 & 1 & 11.4 & 1 \\
 \hline
 \end{tabular}
 \end{table}

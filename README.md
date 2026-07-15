@@ -3,7 +3,15 @@
 Probabilistic tropical-cyclone damage (CLIMADA) + multi-hazard scaling + simplified
 recovery simulations (*pyrecodes light*) for US Atlantic- and Gulf-coast counties.
 Reproduces all figures, tables and reported numbers of the manuscript on
-**Expected Annual Recovery Potential (EARP)**.
+**recovery burden**.
+
+**Naming note.** The manuscript metrics map onto legacy identifiers kept in the
+code and data files: repair demand *D<sub>e,c</sub>* [weighted units affected,
+WUA] = `weighted_damage`; expected annual repair demand **EARD** [WUA/yr] =
+`eaua`; recovery burden *B<sub>e,c</sub>* [months] = `recovery_potential_months`;
+expected annual recovery burden **EARB** [months/yr] = `earp_months_per_year`.
+Event-level medians are computed over damaging events only
+(*D<sub>e,c</sub>* > 0).
 
 ## Environment
 
@@ -124,7 +132,7 @@ python scripts/extract_exposure_units_by_county.py
 
 ### Stage 5 — Recovery (pyrecodes light)
 
-Per-county, per-event recovery potential: `recovery = max(floor, demand / capacity)`
+Per-county, per-event recovery burden: `recovery = max(floor, demand / capacity)`
 with HAZUS repair-time weights tau = (1, 1, 3, 6) months for DS1-DS4 and
 capacity = average monthly building permits. Implemented in
 `modules/recovery_utils.py`; see the module docstring for the method.
@@ -134,14 +142,14 @@ python scripts/run_pyrecodes_light.py
 # -> data/recovery/recovery_potential.csv
 
 python scripts/compute_recovery_potential.py
-# -> analysis_output/earp_per_county.csv  (EARP: frequency-weighted sum)
+# -> analysis_output/earp_per_county.csv  (EARB: frequency-weighted sum)
 ```
 
 ### Stage 6 — County metrics
 
 ```bash
 python scripts/analyze_event_frequency_damage.py
-# -> analysis_output/county_event_frequency_damage_metrics.csv  (EAUA inputs)
+# -> analysis_output/county_event_frequency_damage_metrics.csv  (EARD inputs)
 
 python scripts/compare_median_vs_max_events.py
 # -> analysis_output/median_vs_max_event_comparison.csv
