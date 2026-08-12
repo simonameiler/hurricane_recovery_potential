@@ -85,7 +85,7 @@ def load_capacity_data():
     """Load construction capacity data."""
     print("\n3. Loading construction capacity data...")
     
-    permits_file = BASE_DIR / "data" / "selected_states_counties_with_permits.csv"
+    permits_file = BASE_DIR / "data" / "selected_states_counties_with_permits_ctfix.csv"
     permits_df = pd.read_csv(permits_file)
     permits_df['fips'] = permits_df['FIPS'].astype(str).str.zfill(5)
     

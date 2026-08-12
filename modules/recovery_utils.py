@@ -30,7 +30,16 @@ PERMIT_COL = "Average_Building_Permits(12 months)"  # already permits/month
 
 
 def load_permit_capacity(permit_file, capacity_modifier=1.0):
-    """FIPS (int) -> construction capacity (permits/month) from the permit CSV."""
+    """FIPS (int) -> construction capacity (permits/month) from the permit CSV.
+
+    Pass the ``_ctfix`` permit table. The Building Permits Survey reports
+    Connecticut on the nine planning regions (FIPS 09110-09190) that replaced
+    counties as county equivalents, while the exposure and hazard use the legacy
+    county FIPS (09001-09015); nothing joins, and all eight Connecticut counties
+    would be dropped despite having modelled repair demand. scripts/
+    build_ct_capacity.py writes a permit table in which the nine regions are
+    replaced by the eight legacy counties, apportioned by housing units.
+    """
     perm = pd.read_csv(permit_file)
     return dict(
         zip(

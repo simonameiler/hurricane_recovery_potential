@@ -17,7 +17,7 @@ sys.path.insert(0, str(BASE_DIR))
 from modules.recovery_utils import compute_recovery_potential
 
 DEFAULT_PER_EVENT_DIR = BASE_DIR / "data" / "impact" / "per_event"
-DEFAULT_PERMIT_FILE = BASE_DIR / "data" / "selected_states_counties_with_permits.csv"
+DEFAULT_PERMIT_FILE = BASE_DIR / "data" / "selected_states_counties_with_permits_ctfix.csv"
 DEFAULT_OUT_CSV = BASE_DIR / "data" / "recovery" / "recovery_potential.csv"
 
 
