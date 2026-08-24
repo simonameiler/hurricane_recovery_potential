@@ -240,7 +240,7 @@ def print_comparison_statistics(median_metrics, max_metrics):
     output_file = BASE_DIR / "analysis_output" / "median_vs_max_event_comparison.csv"
     comparison.to_csv(output_file, index=False)
     print(f"\nComparison data saved to: {output_file}")
-    
+
     return comparison
 
 

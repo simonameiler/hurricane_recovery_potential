@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from climada.entity import ImpactFunc, ImpactFuncSet
+from climada.entity import ImpactFuncSet
 from climada.entity.impact_funcs.trop_cyclone import ImpfTropCyclone
 
 PATH_CSV_TC_CAPRA_BEM = Path('data/CAPRA_TO_BEM_TC_WIND_IMPACT_FUNCTIONS.csv')
@@ -103,46 +103,3 @@ def if_from_sig_funcs_capra(bldg_type):
 
 IMPF_SET_TC_CAPRA = ImpactFuncSet([if_from_sig_funcs_capra(bldg_sub)
                                    for bldg_sub in DICT_PAGER_TCIMPF_CAPRA.keys()])
-
-
-# ===================================================================================
-# Use of HAZUS TC impact functions per damage state as dervied by hazus_tc_impf_ds.py
-# ===================================================================================
-
-# Define your 16 earthquake-compatible classes in a fixed order
-HAZUS_CLASSES = [
-    'W1', 'W2', 'S1', 'S2', 'S3', 'S4', 'S5',
-    'C1', 'C2', 'C3', 'RM1', 'RM2', 'URM', 'MH', 'PC1', 'PC2'
-]
-
-# Create the dictionary mapping each class to its ID
-DICT_HAZUS_TCIMPF = {cls: idx+1 for idx, cls in enumerate(HAZUS_CLASSES)}
-
-# Load impact functions sets
-def load_impact_func_set_ds(damage_state):
-    data = Path('/Users/simonameiler/Documents/work/03_code/repos/recovery/data')
-    csv_file = 'simplified_hazus_if_climada.csv'
-    df = pd.read_csv(data.joinpath(csv_file))
-    df_filtered = df[df['damage_state'] == damage_state]
-    if df_filtered.empty:
-        raise ValueError(f"No data found for damage state {damage_state}")
-
-    impact_func_set = ImpactFuncSet()
-
-    for eq_class in HAZUS_CLASSES:
-        class_df = df_filtered[df_filtered['eq_class'] == eq_class]
-        if class_df.empty:
-            continue  # Skip if no data for this class
-
-        impf = ImpactFunc(
-            id=DICT_HAZUS_TCIMPF[eq_class],  # Use fixed ID from the dictionary
-            name=f'TC impact func {eq_class} DS{damage_state}',
-            intensity_unit='m/s',
-            haz_type='TC',
-            intensity=class_df['intensity_m_s'].values,
-            mdd=class_df['mdd'].values,
-            paa=np.ones_like(class_df['intensity_m_s'].values)  # assuming paa=1
-        )
-        impact_func_set.append(impf)
-
-    return impact_func_set

@@ -29,7 +29,7 @@ RECOVERY_WEIGHTS = {
 def load_event_data():
     """Load all per-event scaled impact data."""
     print("Loading per-event impact data...")
-    
+
     per_event_dir = BASE_DIR / "data" / "impact" / "per_event"
     event_files = sorted(per_event_dir.glob("*.csv"))
 
@@ -239,19 +239,19 @@ def main():
     print("="*80)
     print("EVENT FREQUENCY AND DAMAGE ANALYSIS")
     print("="*80)
-    
+
     # Load data
     events_df = load_event_data()
     housing_df = load_housing_stock()
-    
+
     # Compute metrics
     county_metrics = compute_event_frequency_metrics(events_df)
     county_metrics = add_housing_stock_metrics(county_metrics, housing_df)
-    
+
     # Print summaries
     print_summary_statistics(county_metrics)
     print_top_counties(county_metrics, n=10)
-    
+
     # Save results
     output_file = BASE_DIR / "analysis_output" / "county_event_frequency_damage_metrics.csv"
     county_metrics.to_csv(output_file, index=False)
